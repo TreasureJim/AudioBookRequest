@@ -1,0 +1,49 @@
+{% extends "settings_page/base.html" %}
+{% block head %}
+<title>Settings - Download Client</title>
+{% include "scripts/alpinejs.html" %}
+{% endblock head %}
+{% block content %}
+<div class="flex flex-col gap-2">
+    <h2 class="text-lg">Download Client</h2>
+
+    <label for="downloadclient-base-url">Base URL</label>
+    <form class="join w-full" hx-put="{{ base_url }}/settings/downloadclient/base-url"
+        hx-disabled-elt="#downloadclient-base-url-button">
+        <input id="downloadclient-base-url" name="base_url" type="url" value="{{ downloadclient_base_url }}" class="input join-item w-full"
+            minlength="1" required />
+        <button id="downloadclient-base-url-button" class="join-item btn">
+            {% if downloadclient_base_url %}
+            Update
+            {% else %}
+            Add
+            {% endif %}
+        </button>
+    </form>
+
+    <label for="downloadclient-username" class="pt-2">Username</label>
+    <form class="join w-full" hx-put="{{ base_url }}/settings/downloadclient/username"
+        hx-disabled-elt="#downloadclient-username-button">
+        <input id="downloadclient-username" name="username" value="{{ downloadclient_username }}" class="input join-item w-full" minlength="1" required />
+        <button id="downloadclient-username-button" class="join-item btn">
+            {% if downloadclient_username %}
+            Update
+            {% else %}
+            Add
+            {% endif %}
+        </button>
+    </form>
+
+    <label for="downloadclient-password" class="pt-2">password</label>
+    <form class="join w-full" hx-put="{{ base_url }}/settings/downloadclient/password"
+        hx-disabled-elt="#downloadclient-password-button">
+        <input id="downloadclient-password" name="password" type="password" {% if downloadclient_password %}placeholder="●●●●●●●●●●●●●●●●●" {% endif %} class="input join-item w-full" minlength="1" required />
+        <button id="downloadclient-password-button" class="join-item btn">
+            {% if downloadclient_password %}
+            Update
+            {% else %}
+            Add
+            {% endif %}
+        </button>
+    </form>
+{% endblock content %}

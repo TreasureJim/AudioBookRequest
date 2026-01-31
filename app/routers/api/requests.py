@@ -349,6 +349,9 @@ async def download_book(
         session.add(book)
         session.commit()
 
+    # Wait for prowlarr to finish download probably in another function so we dont slow this request
+    # TODO: ADD postprocessing step here, also probably find some way to wait for prowlarr to finish the download?
+
     if abs_config.is_valid(session):
         background_task.add_task(background_abs_trigger_scan)
 
