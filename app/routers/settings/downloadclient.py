@@ -8,6 +8,7 @@ from app.internal.auth.authentication import ABRAuth, DetailedUser
 from app.internal.models import GroupEnum
 from app.util.connection import get_connection
 from app.util.db import get_session
+from app.util.log import logger
 from app.util.templates import template_response
 
 from app.routers.api.settings.downloadclient import (
@@ -15,6 +16,7 @@ from app.routers.api.settings.downloadclient import (
     update_downclient_base_url as api_update_downclient_base_url,
     update_downclient_username as api_update_downclient_username,
     update_downclient_password as api_update_downclient_password,
+    test_downclient_connection as api_test_downclient_connection,
 )
 
 router = APIRouter(prefix="/downloadclient")
@@ -40,7 +42,7 @@ async def read_downclient(
             "page": "downloadclient",
             "downloadclient_base_url": response.base_url,
             "downloadclient_username": response.username,
-            "downloadclient_password": response.password
+            "downloadclient_password": response.password,
         },
     )
 
@@ -51,8 +53,11 @@ def update_downclient_base_url(
     session: Annotated[Session, Depends(get_session)],
     admin_user: Annotated[DetailedUser, Security(ABRAuth(GroupEnum.admin))],
 ):
-    api_update_downclient_base_url(base_url=base_url, session=session, admin_user=admin_user)
+    api_update_downclient_base_url(
+        base_url=base_url, session=session, admin_user=admin_user
+    )
     return Response(status_code=204, headers={"HX-Refresh": "true"})
+
 
 @router.put("/username")
 def update_downclient_username(
@@ -60,8 +65,11 @@ def update_downclient_username(
     session: Annotated[Session, Depends(get_session)],
     admin_user: Annotated[DetailedUser, Security(ABRAuth(GroupEnum.admin))],
 ):
-    api_update_downclient_username(username=username, session=session, admin_user=admin_user)
+    api_update_downclient_username(
+        username=username, session=session, admin_user=admin_user
+    )
     return Response(status_code=204, headers={"HX-Refresh": "true"})
+
 
 @router.put("/password")
 def update_downclient_password(
@@ -69,31 +77,27 @@ def update_downclient_password(
     session: Annotated[Session, Depends(get_session)],
     admin_user: Annotated[DetailedUser, Security(ABRAuth(GroupEnum.admin))],
 ):
-    api_update_downclient_password(password=password, session=session, admin_user=admin_user)
+    api_update_downclient_password(
+        password=password, session=session, admin_user=admin_user
+    )
     return Response(status_code=204, headers={"HX-Refresh": "true"})
 
 
-# @router.put("/library")
-# def update_downclient_library(
-#     library_id: Annotated[str, Form(alias="library_id")],
-#     session: Annotated[Session, Depends(get_session)],
-#     admin_user: Annotated[DetailedUser, Security(ABRAuth(GroupEnum.admin))],
-# ):
-#     api_update_downclient_library(
-#         library_id=library_id, session=session, admin_user=admin_user
-#     )
-#     return Response(status_code=204, headers={"HX-Refresh": "true"})
-#
-#
-# @router.put("/check-downloaded")
-# def update_downclient_check_downloaded(
-#     session: Annotated[Session, Depends(get_session)],
-#     admin_user: Annotated[DetailedUser, Security(ABRAuth(GroupEnum.admin))],
-#     check_downloaded: Annotated[bool, Form()] = False,
-# ):
-#     api_update_downclient_check_downloaded(
-#         session=session,
-#         admin_user=admin_user,
-#         check_downloaded=check_downloaded,
-#     )
-#     return Response(status_code=204, headers={"HX-Refresh": "true"})
+@router.get("/test-connection")
+async def test_connection(
+    request: Request,
+    session: Annotated[Session, Depends(get_session)],
+    client_session: Annotated[ClientSession, Depends(get_connection)],
+    admin_user: Annotated[DetailedUser, Security(ABRAuth(GroupEnum.admin))],
+):
+    resp = await api_test_downclient_connection(
+        session=session, client_session=client_session, admin_user=admin_user
+    )
+
+    logger.error(resp)
+    return template_response(
+        "components/connection_test_result.html",
+        request,
+        admin_user,
+        {"conn_success": resp.success, "conn_resp_info": resp.reason},
+    )

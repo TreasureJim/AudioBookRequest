@@ -20,11 +20,17 @@ class DownclientConfig(StringConfigCache[DownclientConfigKey]):
     def is_valid(self, session: Session) -> bool:
         return (
             self.get_base_url(session) is not None
+            and self.get_username(session) is not None
+            and self.get_password(session) is not None
         )
 
     def raise_if_invalid(self, session: Session):
         if not self.get_base_url(session):
             raise DownclientMisconfigured("Download client base url not set")
+        if not self.get_username(session):
+            raise DownclientMisconfigured("Download client username not set")
+        if not self.get_password(session):
+            raise DownclientMisconfigured("Download client password not set")
 
     def get_base_url(self, session: Session) -> Optional[str]:
         return self.get(session, "downclient_base_url")
