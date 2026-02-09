@@ -4,6 +4,7 @@ from typing import Optional
 from aiohttp import ClientSession
 import aiohttp
 
+from app.internal.downloadclient.types import Torrent
 from app.util.log import logger
 
 def authorised(func: FunctionType):  
@@ -74,7 +75,7 @@ class qBittorrentClient:
             self.bad_login()
 
     @authorised
-    async def torrent_properties(self, hash: str):
+    async def torrent_properties(self, hash: str) -> Torrent:
         url = posixpath.join(self.base_url, "api/v2/torrents/properties")
 
         async with self.http_session.get(
@@ -86,7 +87,7 @@ class qBittorrentClient:
                 logger.info(f"Downloadclient torrent {hash} wasn't found.")
                 raise qBittorrentClient.TorrentNotFound(hash)
 
-            raise Exception("TODO!")
+            return Torrent.model_validate_json(await resp.text())
 
 
 
@@ -96,3 +97,37 @@ class qBittorrentClient:
         def __init__(self, hash: str, **kargs: object) -> None:
             super().__init__(**kargs)
             self.hash = hash
+
+    @authorised
+    async def start_download(self, torrent_url: str, category: str, rename: Optional[str]):
+        valid_prefixes = [ "http://", "https://", "magnet:", "bc://bt/" ]
+        if not torrent_url.startswith(tuple(valid_prefixes)):
+            raise qBittorrentClient.UrlInvalid(torrent_url)
+
+        form = aiohttp.FormData(default_to_multipart=True)
+        form.add_field("urls", torrent_url)
+        form.add_field("category", category)
+        if rename:
+            form.add_field("rename", rename)
+
+        url = posixpath.join(self.base_url, "api/v2/torrents/add")
+        async with self.http_session.post(
+            url,
+            data=form
+        ) as resp:
+            if resp.status == 415:
+                raise qBittorrentClient.TorrentFileInvalid(torrent_url)
+
+    class TorrentFileInvalid(Exception):
+        url: str
+
+        def __init__(self, url: str, **kargs: object) -> None:
+            super().__init__(**kargs)
+            self.url = url
+
+    class UrlInvalid(Exception):
+        url: str
+
+        def __init__(self, url: str, **kargs: object) -> None:
+            super().__init__(*kargs)
+            self.url = url
