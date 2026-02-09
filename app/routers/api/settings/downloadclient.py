@@ -1,18 +1,17 @@
 from typing import Annotated
 
 from aiohttp import ClientSession
-from fastapi import APIRouter, Depends, Form, HTTPException, Response, Security
+from fastapi import APIRouter, Depends, Form, Response, Security
 from pydantic import BaseModel
 from sqlmodel import Session
 
 from app.internal.auth.authentication import APIKeyAuth, DetailedUser
 
-from app.internal.downloadclient.client import LoginIPBlockedException, LoginUnauthorizedException, login
+from app.internal.downloadclient.client import LoginIPBlockedException, LoginUnauthorizedException, qBittorrentClient
 from app.internal.downloadclient.config import downclient_config
 from app.internal.models import GroupEnum
 from app.util.connection import get_connection
 from app.util.db import get_session
-from app.util.log import logger
 
 router = APIRouter(prefix="/downloadclient")
 

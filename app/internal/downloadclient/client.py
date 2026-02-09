@@ -1,4 +1,3 @@
-from functools import wraps
 import posixpath
 from types import FunctionType
 from typing import Optional
@@ -7,6 +6,23 @@ import aiohttp
 
 from app.util.log import logger
 
+def authorised(func: FunctionType):  
+    async def wrapper(self: qBittorrentClient):
+        if self.is_authorised():
+            await self.login()
+        func()
+    return wrapper
+
+class LoginException(Exception):
+    pass
+
+class LoginUnauthorizedException(Exception):
+    pass
+
+class LoginIPBlockedException(Exception):
+    pass
+
+
 class qBittorrentClient:
     def __init__(self, base_url: str, username: str, password: str):
         self.base_url: str = base_url
@@ -14,6 +30,9 @@ class qBittorrentClient:
         self.password: str = password
         self.http_session: ClientSession = aiohttp.ClientSession(base_url=base_url)
         self.sid: Optional[str] = None
+
+    def is_authorised(self) -> bool:
+        return (self.sid is None)
 
     async def login(self) -> str:
         data = {
@@ -32,39 +51,23 @@ class qBittorrentClient:
         ) as resp:
             if resp.status == 403:
                 logger.error("qBittorrent: Too many login attempts. IP is blocked.")
-                raise qBittorrentClient.LoginIPBlockedException()
+                raise LoginIPBlockedException()
             if not resp.ok:
                 logger.error(
                     "qBittorrent: failed to send login",
                     status=resp.status, reason=resp.reason,
                 )
-                raise qBittorrentClient.LoginException()
+                raise LoginException()
 
             sid = resp.cookies.get("SID")
             if not sid:
-                raise qBittorrentClient.LoginUnauthorizedException()
+                raise LoginUnauthorizedException()
 
             return str(sid)
 
-    class LoginException(Exception):
-        pass
-
-    class LoginUnauthorizedException(Exception):
-        pass
-
-    class LoginIPBlockedException(Exception):
-        pass
-
-    def authorised(func: FunctionType):
-        def wrapper(self):
-            if self.sid is None:
-                self.login()
-            func
-        return wrapper
-
     def bad_login(self):
         self.sid = None
-        raise qBittorrentClient.LoginUnauthorizedException()
+        raise LoginUnauthorizedException()
 
     def check_bad_login(self, status_code: int):
         if status_code == 401 or status_code == 403:
