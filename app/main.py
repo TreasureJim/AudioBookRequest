@@ -20,6 +20,7 @@ from app.internal.env_settings import Settings
 from app.internal.models import User
 from app.routers import api, auth, recommendations, root, search, settings, wishlist
 from app.util.db import get_session
+from app.util.downloadclient import initialise_client as initialise_downloadclient
 from app.util.fetch_js import fetch_scripts
 from app.util.redirect import BaseUrlRedirectResponse
 from app.util.templates import templates
@@ -33,6 +34,16 @@ with next(get_session()) as session:
     initialize_force_login_type(session)
     clear_old_book_caches(session)
 
+initialise_downloadclient(session)
+
+# TODO LIAM
+# Settings Page - Done
+# Initialise on startup - Done
+# Actually start download in download client instead of prowlarr
+# Loop to update download progress
+# Identify metadata and move when finished
+# Update UI to show progress in downloads page
+# Add page to allow for editing of metadata
 
 app = FastAPI(
     title="AudioBookRequest",

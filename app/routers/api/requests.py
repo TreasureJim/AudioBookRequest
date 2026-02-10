@@ -22,6 +22,7 @@ from app.internal.book_search import (
     get_region_from_settings,
     audible_regions,
 )
+from app.internal.downloadclient.config import downclient_config
 from app.internal.models import (
     Audiobook,
     AudiobookRequest,
@@ -42,6 +43,7 @@ from app.internal.ranking.quality import quality_config
 from app.internal.db_queries import get_wishlist_results
 from app.util.connection import get_connection
 from app.util.db import get_session
+from app.util.downloadclient import download_client
 from app.util.log import logger
 from app.util.toast import ToastException
 
@@ -329,19 +331,27 @@ async def download_book(
     client_session: Annotated[ClientSession, Depends(get_connection)],
     admin_user: Annotated[DetailedUser, Security(APIKeyAuth(GroupEnum.admin))],
 ):
-    try:
-        resp = await start_download(
-            session=session,
-            client_session=client_session,
-            guid=body.guid,
-            indexer_id=body.indexer_id,
-            requester=admin_user,
-            book_asin=asin,
-        )
-    except ProwlarrMisconfigured as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    if not resp.ok:
-        raise HTTPException(status_code=500, detail="Failed to start download")
+    category = downclient_config.get_category(session)
+
+    # TODO: Add logic for renaming torrents
+    # rename_torrent = downclient_config.get_rename_torrents(session)
+
+    # Start downloadclient download
+    download_client.start_download(body.guid, category)
+
+    # try:
+    #     resp = await start_download(
+    #         session=session,
+    #         client_session=client_session,
+    #         guid=body.guid,
+    #         indexer_id=body.indexer_id,
+    #         requester=admin_user,
+    #         book_asin=asin,
+    #     )
+    # except ProwlarrMisconfigured as e:
+    #     raise HTTPException(status_code=500, detail=str(e))
+    # if not resp.ok:
+    #     raise HTTPException(status_code=500, detail="Failed to start download")
 
     book = session.exec(select(Audiobook).where(Audiobook.asin == asin)).first()
     if book:
@@ -350,7 +360,7 @@ async def download_book(
         session.commit()
 
     # Wait for prowlarr to finish download probably in another function so we dont slow this request
-    # TODO: ADD postprocessing step here, also probably find some way to wait for prowlarr to finish the download?
+    # TODO: ADD postprocessing step here
 
     if abs_config.is_valid(session):
         background_task.add_task(background_abs_trigger_scan)

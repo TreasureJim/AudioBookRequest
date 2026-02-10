@@ -99,14 +99,15 @@ class qBittorrentClient:
             self.hash = hash
 
     @authorised
-    async def start_download(self, torrent_url: str, category: str, rename: Optional[str]):
+    async def start_download(self, torrent_url: str, category: Optional[str], rename: Optional[str] = None):
         valid_prefixes = [ "http://", "https://", "magnet:", "bc://bt/" ]
         if not torrent_url.startswith(tuple(valid_prefixes)):
             raise qBittorrentClient.UrlInvalid(torrent_url)
 
         form = aiohttp.FormData(default_to_multipart=True)
         form.add_field("urls", torrent_url)
-        form.add_field("category", category)
+        if category:
+            form.add_field("category", category)
         if rename:
             form.add_field("rename", rename)
 

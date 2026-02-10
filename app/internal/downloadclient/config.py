@@ -13,6 +13,8 @@ DownclientConfigKey = Literal[
     "downclient_base_url",
     "downclient_username",
     "downclient_password",
+    "downclient_category",
+    "downclient_rename_torrents",
 ]
 
 
@@ -50,5 +52,23 @@ class DownclientConfig(StringConfigCache[DownclientConfigKey]):
 
     def set_password(self, session: Session, password: str):
         self.set(session, "downclient_password", password)
+
+    def get_category(self, session: Session) -> Optional[str]:
+        self.get(session, "downclient_category")
+
+    def set_category(self, session: Session, category: str):
+        self.set(session, "downclient_category", category)
+
+    def get_rename_torrents(self, session: Session) -> Optional[bool]:
+        if b := self.get(session, "downclient_rename_torrents"):
+            return b == "1"
+        else: 
+            return False
+
+    def set_rename_torrents(self, session: Session, rename_torrents: bool):
+        if rename_torrents:
+            self.set(session, "downclient_rename_torrents", "1")
+        else:
+            self.set(session, "downclient_rename_torrents", "0")
 
 downclient_config = DownclientConfig()
