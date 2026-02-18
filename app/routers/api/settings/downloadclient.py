@@ -1,17 +1,16 @@
 from typing import Annotated
 
-from aiohttp import ClientSession
 from fastapi import APIRouter, Depends, Form, Response, Security
 from pydantic import BaseModel
 from sqlmodel import Session
 
 from app.internal.auth.authentication import APIKeyAuth, DetailedUser
 
-from app.internal.downloadclient.client import LoginIPBlockedException, LoginUnauthorizedException, qBittorrentClient
+from app.internal.downloadclient.client import qBittorrentClient
 from app.internal.downloadclient.config import downclient_config
 from app.internal.models import GroupEnum
-from app.util.connection import get_connection
 from app.util.db import get_session
+from app.util.downloadclient import get_global_downloadclient
 
 router = APIRouter(prefix="/downloadclient")
 
@@ -25,7 +24,7 @@ class DownclientResponse(BaseModel):
 @router.get("")
 async def read_downclient(
     session: Annotated[Session, Depends(get_session)],
-    client_session: Annotated[ClientSession, Depends(get_connection)],
+    # client_session: Annotated[ClientSession, Depends(get_connection)],
     admin_user: Annotated[DetailedUser, Security(APIKeyAuth(GroupEnum.admin))],
 ):
     _ = admin_user
@@ -77,20 +76,21 @@ class DownclientLoginResponse(BaseModel):
 @router.get("/test-connection")
 async def test_downclient_connection(
     session: Annotated[Session, Depends(get_session)],
-    client_session: Annotated[ClientSession, Depends(get_connection)],
+    # client_session: Annotated[ClientSession, Depends(get_connection)],
     admin_user: Annotated[DetailedUser, Security(APIKeyAuth(GroupEnum.admin))],
+    download_client: Annotated[qBittorrentClient, Depends(get_global_downloadclient)]
 ):
     _ = admin_user
     downclient_config.raise_if_invalid(session)
 
     try:
-        await login(session, client_session)
-    except LoginUnauthorizedException:
+        await download_client.login()
+    except qBittorrentClient.LoginUnauthorizedException:
         return DownclientLoginResponse(
             success=False,
             reason="Unauthorized"
         )
-    except LoginIPBlockedException:
+    except qBittorrentClient.LoginIPBlockedException:
         return DownclientLoginResponse(
             success=False,
             reason="IP blocked. Too many login attempts."

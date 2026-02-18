@@ -1,6 +1,7 @@
-from typing import Awaitable, Callable
+import asyncio
+from contextlib import asynccontextmanager
+from typing import AsyncGenerator, Awaitable, Callable
 from urllib.parse import quote_plus, urlencode
-
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware import Middleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -20,7 +21,10 @@ from app.internal.env_settings import Settings
 from app.internal.models import User
 from app.routers import api, auth, recommendations, root, search, settings, wishlist
 from app.util.db import get_session
-from app.util.downloadclient import initialise_client as initialise_downloadclient
+from app.util.downloadclient import (
+    check_download_progress_task,
+    initialise_global_downloadclient as initialise_downloadclient,
+)
 from app.util.fetch_js import fetch_scripts
 from app.util.redirect import BaseUrlRedirectResponse
 from app.util.templates import templates
@@ -34,12 +38,31 @@ with next(get_session()) as session:
     initialize_force_login_type(session)
     clear_old_book_caches(session)
 
-initialise_downloadclient(session)
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
+    await initialise_downloadclient(session)
+    print("Download client initialized.")
+
+    stop_event = asyncio.Event()
+    downloadclient_progress_update_task = asyncio.create_task(
+        check_download_progress_task(stop_event)
+    )
+    
+    yield
+
+    if downloadclient_progress_update_task:
+        stop_event.set() 
+        await asyncio.sleep(0.1) 
+        downloadclient_progress_update_task.cancel()
+        try:
+            await downloadclient_progress_update_task
+        except asyncio.CancelledError:
+            pass # Expected
 
 # TODO LIAM
 # Settings Page - Done
 # Initialise on startup - Done
-# Actually start download in download client instead of prowlarr
+# Actually start download in download client instead of prowlarr - Done
 # Loop to update download progress
 # Identify metadata and move when finished
 # Update UI to show progress in downloads page
@@ -48,6 +71,7 @@ initialise_downloadclient(session)
 app = FastAPI(
     title="AudioBookRequest",
     debug=Settings().app.debug,
+    lifespan=lifespan,
     openapi_url="/openapi.json" if Settings().app.openapi_enabled else None,
     description="API for AudiobookRequest",
     middleware=[

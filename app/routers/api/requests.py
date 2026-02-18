@@ -22,6 +22,7 @@ from app.internal.book_search import (
     get_region_from_settings,
     audible_regions,
 )
+from app.internal.downloadclient.client import qBittorrentClient
 from app.internal.downloadclient.config import downclient_config
 from app.internal.models import (
     Audiobook,
@@ -43,7 +44,7 @@ from app.internal.ranking.quality import quality_config
 from app.internal.db_queries import get_wishlist_results
 from app.util.connection import get_connection
 from app.util.db import get_session
-from app.util.downloadclient import download_client
+from app.util.downloadclient import download_client, get_global_downloadclient
 from app.util.log import logger
 from app.util.toast import ToastException
 
@@ -328,6 +329,7 @@ async def download_book(
     background_task: BackgroundTasks,
     body: DownloadSourceBody,
     session: Annotated[Session, Depends(get_session)],
+    download_client: Annotated[qBittorrentClient, Depends(get_global_downloadclient)],
     client_session: Annotated[ClientSession, Depends(get_connection)],
     admin_user: Annotated[DetailedUser, Security(APIKeyAuth(GroupEnum.admin))],
 ):
@@ -336,22 +338,12 @@ async def download_book(
     # TODO: Add logic for renaming torrents
     # rename_torrent = downclient_config.get_rename_torrents(session)
 
-    # Start downloadclient download
-    download_client.start_download(body.guid, category)
-
-    # try:
-    #     resp = await start_download(
-    #         session=session,
-    #         client_session=client_session,
-    #         guid=body.guid,
-    #         indexer_id=body.indexer_id,
-    #         requester=admin_user,
-    #         book_asin=asin,
-    #     )
-    # except ProwlarrMisconfigured as e:
-    #     raise HTTPException(status_code=500, detail=str(e))
-    # if not resp.ok:
-    #     raise HTTPException(status_code=500, detail="Failed to start download")
+    try:
+        await download_client.start_download(body.guid, category)
+    except qBittorrentClient.LoginUnauthorizedException:
+        raise HTTPException(status_code=500, detail="No valid authorisation for download client")
+    except qBittorrentClient.UrlInvalid or qBittorrentClient.TorrentFileInvalid:
+        raise HTTPException(status_code=400, detail="Torrent URL is invalid")
 
     book = session.exec(select(Audiobook).where(Audiobook.asin == asin)).first()
     if book:

@@ -1,27 +1,32 @@
+from functools import wraps
 import posixpath
-from types import FunctionType
-from typing import Optional
+from typing import Any, Awaitable, Callable, Optional, ParamSpec, TypeVar
 from aiohttp import ClientSession
 import aiohttp
 
 from app.internal.downloadclient.types import Torrent
 from app.util.log import logger
 
-def authorised(func: FunctionType):  
-    async def wrapper(self: qBittorrentClient):
-        if self.is_authorised():
+# Define ParamSpec to capture the exact parameters of the decorated function
+P = ParamSpec("P")
+# Define TypeVar for the return type, constrained to Awaitable for async functions
+R = TypeVar("R", bound=Awaitable[Any])  # pyright: ignore[reportExplicitAny]
+
+def authorised(func: Callable[P, R]) -> Callable[P, R]:
+    @wraps(func)
+    async def wrapper(self: qBittorrentClient, *args: P.args, **kwargs: P.kwargs) -> R:
+        # P.args and P.kwargs ensure the wrapper's signature matches func's,
+        # with 'self' explicitly typed, which is crucial for instance methods.
+        
+        if not self.is_authorised():
+            print("Client not authorized. Attempting to log in...")
             await self.login()
-        func()
-    return wrapper
-
-class LoginException(Exception):
-    pass
-
-class LoginUnauthorizedException(Exception):
-    pass
-
-class LoginIPBlockedException(Exception):
-    pass
+            if not self.is_authorised():
+                raise qBittorrentClient.LoginUnauthorizedException()
+        
+        return await func(self, *args, **kwargs)  # pyright: ignore[reportUnknownVariableType, reportCallIssue]
+    
+    return wrapper # pyright: ignore[reportReturnType]
 
 
 class qBittorrentClient:
@@ -52,23 +57,32 @@ class qBittorrentClient:
         ) as resp:
             if resp.status == 403:
                 logger.error("qBittorrent: Too many login attempts. IP is blocked.")
-                raise LoginIPBlockedException()
+                raise qBittorrentClient.LoginIPBlockedException()
             if not resp.ok:
                 logger.error(
                     "qBittorrent: failed to send login",
                     status=resp.status, reason=resp.reason,
                 )
-                raise LoginException()
+                raise qBittorrentClient.LoginException()
 
             sid = resp.cookies.get("SID")
             if not sid:
-                raise LoginUnauthorizedException()
+                raise qBittorrentClient.LoginUnauthorizedException()
 
             return str(sid)
 
+    class LoginException(Exception):
+        pass
+
+    class LoginUnauthorizedException(Exception):
+        pass
+
+    class LoginIPBlockedException(Exception):
+        pass
+
     def bad_login(self):
         self.sid = None
-        raise LoginUnauthorizedException()
+        raise qBittorrentClient.LoginUnauthorizedException()
 
     def check_bad_login(self, status_code: int):
         if status_code == 401 or status_code == 403:
