@@ -3,18 +3,19 @@ from collections import OrderedDict, defaultdict
 from datetime import datetime
 from itertools import chain
 from typing import Counter, Iterable
+
+from aiohttp import ClientSession
 from pydantic import BaseModel
 from sqlmodel import Session, select
-from aiohttp import ClientSession
-from app.internal.recommendations.audible import list_similar_audible_books
+
+from app.internal.audible.similar import list_similar_audible_books
+from app.internal.models import Audiobook, AudiobookRequest, AudiobookWithRequests, User
+from app.util.censor import censor
 from app.util.log import logger
 
 
-from app.internal.models import Audiobook, AudiobookRequest, User
-
-
 class AudiobookRecommendation(BaseModel):
-    book: Audiobook
+    book: AudiobookWithRequests
     reason: str | None = None
 
 
@@ -80,7 +81,7 @@ async def get_user_sims_recommendations(
     if not seeds:
         logger.debug(
             "No seed ASINs for user recommendations",
-            username=user.username,
+            username=censor(user.username),
             input_seed_asins=seed_asins,
         )
         return UserSimsRecommendation(recommendations=[], total=0)
@@ -105,7 +106,7 @@ async def get_user_sims_recommendations(
     if not similar_books:
         logger.debug(
             "No sims found for user recommendations",
-            username=user.username,
+            username=censor(user.username),
             seed_asins=list(seeds.keys()),
         )
         return UserSimsRecommendation(recommendations=[], total=0)
@@ -224,6 +225,16 @@ async def get_user_sims_recommendations(
     # Convert to BookSearchResult and apply limit
     results: list[AudiobookRecommendation] = []
     for sim in ordered_books[offset : offset + limit]:
-        results.append(AudiobookRecommendation(book=sim.book, reason=sim.reason))
+        book_with_requests = AudiobookWithRequests(
+            book=sim.book,
+            requests=sim.book.requests,
+            username=censor(user.username),
+        )
+        results.append(
+            AudiobookRecommendation(
+                book=book_with_requests,
+                reason=sim.reason,
+            )
+        )
 
     return UserSimsRecommendation(recommendations=results, total=len(ordered_books))

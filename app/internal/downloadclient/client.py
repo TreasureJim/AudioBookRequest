@@ -38,7 +38,7 @@ class qBittorrentClient:
         self.sid: Optional[str] = None
 
     def is_authorised(self) -> bool:
-        return (self.sid is None)
+        return (self.sid is not None)
 
     async def login(self) -> str:
         data = {
@@ -65,9 +65,12 @@ class qBittorrentClient:
                 )
                 raise qBittorrentClient.LoginException()
 
-            sid = resp.cookies.get("SID")
-            if not sid:
+            if not (resp.ok or str(await resp.read()) == "Ok."):
                 raise qBittorrentClient.LoginUnauthorizedException()
+
+            sid = resp.cookies.get("SID")
+            if sid:
+                self.sid = str(sid)
 
             return str(sid)
 

@@ -3,12 +3,21 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Awaitable, Callable
 from urllib.parse import quote_plus, urlencode
 from fastapi import FastAPI, HTTPException, Request, status
+import json
+from typing import cast
+
+from fastapi import Response
 from fastapi.middleware import Middleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlmodel import select
+from starlette.responses import Content
 
+# Initialise logger first
+from app.util.log import logger  # pyright: ignore[reportUnusedImport]
+
+from app.internal.audible.search import clear_old_book_caches
 from app.internal.auth.authentication import RequiresLoginException
 from app.internal.auth.config import auth_config, initialize_force_login_type
 from app.internal.auth.oidc_config import InvalidOIDCConfiguration
@@ -16,18 +25,19 @@ from app.internal.auth.session_middleware import (
     DynamicSessionMiddleware,
     middleware_linker,
 )
-from app.internal.book_search import clear_old_book_caches
 from app.internal.env_settings import Settings
 from app.internal.models import User
-from app.routers import api, auth, recommendations, root, search, settings, wishlist
+from app.internal.prowlarr.util import ProwlarrMisconfigured
+from app.routers import api, pages
 from app.util.db import get_session
 from app.util.downloadclient import (
     check_download_progress_task,
+    get_global_downloadclient,
     initialise_global_downloadclient as initialise_downloadclient,
 )
 from app.util.fetch_js import fetch_scripts
 from app.util.redirect import BaseUrlRedirectResponse
-from app.util.templates import templates
+from app.util.templates import catalog_response
 from app.util.toast import ToastException
 
 # intialize js dependencies or throw an error if not in debug mode
@@ -38,26 +48,28 @@ with next(get_session()) as session:
     initialize_force_login_type(session)
     clear_old_book_caches(session)
 
+
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
     await initialise_downloadclient(session)
-    print("Download client initialized.")
+    logger.info("Download client initialized.")
 
     stop_event = asyncio.Event()
     downloadclient_progress_update_task = asyncio.create_task(
         check_download_progress_task(stop_event)
     )
-    
+
     yield
 
     if downloadclient_progress_update_task:
-        stop_event.set() 
-        await asyncio.sleep(0.1) 
+        stop_event.set()
+        await asyncio.sleep(0.1)
         downloadclient_progress_update_task.cancel()
         try:
             await downloadclient_progress_update_task
         except asyncio.CancelledError:
-            pass # Expected
+            pass  # Expected
+
 
 # TODO LIAM
 # Settings Page - Done
@@ -82,13 +94,7 @@ app = FastAPI(
     redirect_slashes=False,
 )
 
-app.include_router(auth.router, include_in_schema=False)
-app.include_router(recommendations.router, include_in_schema=False)
-app.include_router(root.router, include_in_schema=False)
-app.include_router(search.router, include_in_schema=False)
-app.include_router(settings.router, include_in_schema=False)
-app.include_router(wishlist.router, include_in_schema=False)
-# api router under /api
+app.include_router(pages.router, include_in_schema=False)
 app.include_router(api.router)
 
 user_exists = False
@@ -100,7 +106,7 @@ async def redirect_to_login(request: Request, exc: RequiresLoginException):
         params: dict[str, str] = {}
         if exc.detail:
             params["error"] = exc.detail
-        path = request.url.path
+        path = request.url.path.removeprefix(Settings().app.base_url.rstrip("/"))
         if path != "/" and not path.startswith("/login"):
             params["redirect_uri"] = path
         return BaseUrlRedirectResponse("/login?" + urlencode(params))
@@ -115,26 +121,39 @@ async def redirect_to_login(request: Request, exc: RequiresLoginException):
 @app.exception_handler(InvalidOIDCConfiguration)
 async def redirect_to_invalid_oidc(request: Request, exc: InvalidOIDCConfiguration):
     _ = request
-    path = "/auth/invalid-oidc"
+    path = "/auth/oidc/invalid"
     if exc.detail:
         path += f"?error={quote_plus(exc.detail)}"
+    if request.headers.get("HX-Request"):
+        return Response(status_code=400, headers={"HX-Redirect": path})
+    return BaseUrlRedirectResponse(path)
+
+
+@app.exception_handler(ProwlarrMisconfigured)
+async def redirect_to_invalid_prowlarr(request: Request, exc: ProwlarrMisconfigured):
+    _ = exc
+    path = "/settings/invalid?prowlarr_misconfigured=true"
+    if request.headers.get("HX-Request"):
+        return Response(status_code=400, headers={"HX-Redirect": path})
     return BaseUrlRedirectResponse(path)
 
 
 @app.exception_handler(ToastException)
 async def raise_toast(request: Request, exc: ToastException):
-    context: dict[str, Request | str] = {"request": request}
+    _ = request
+    toast_error = toast_success = toast_info = None
     if exc.type == "error":
-        context["toast_error"] = exc.message
+        toast_error = exc.message
     elif exc.type == "success":
-        context["toast_success"] = exc.message
+        toast_success = exc.message
     elif exc.type == "info":
-        context["toast_info"] = exc.message
+        toast_info = exc.message
 
-    return templates.TemplateResponse(
-        "base.html",
-        context,
-        block_name="toast_block",
+    return catalog_response(
+        "ToastBlock",
+        toast_error=toast_error,
+        toast_success=toast_success,
+        toast_info=toast_info,
         headers={"HX-Retarget": "#toast-block"}
         | ({"HX-Refresh": "true"} if exc.force_refresh else {}),
     )
@@ -149,10 +168,11 @@ async def redirect_to_init(
     Initial redirect if no user exists. We force the user to create a new login
     """
     global user_exists
+    path = request.url.path.removeprefix(Settings().app.base_url.rstrip("/"))
     if (
         not user_exists
-        and request.url.path != "/init"
-        and not request.url.path.startswith("/static")
+        and path != "/init"
+        and not path.startswith("/static")
         and request.method == "GET"
     ):
         with next(get_session()) as session:
@@ -161,7 +181,41 @@ async def redirect_to_init(
                 return BaseUrlRedirectResponse("/init")
             else:
                 user_exists = True
-    elif user_exists and request.url.path.startswith("/init"):
+    elif user_exists and path.startswith("/init"):
         return BaseUrlRedirectResponse("/")
     response = await call_next(request)
+    return response
+
+
+@app.middleware("http")
+async def throw_toast_exception(
+    request: Request,
+    call_next: Callable[[Request], Awaitable[StreamingResponse]],
+):
+    """On htmx requests, convert HTTPExceptions/other errors into ToastExceptions"""
+    response = await call_next(request)
+    if (
+        400 <= response.status_code
+        and not response.headers.get("HX-Redirect")  # already handled
+        and request.headers.get("HX-Request") == "true"
+    ):
+
+        def to_string(b: Content) -> str:
+            if isinstance(b, bytes):
+                return b.decode("utf-8")
+            elif isinstance(b, str):
+                return b
+            else:
+                return str(b)
+
+        body = "".join([to_string(x) async for x in response.body_iterator])
+        try:
+            parsed = json.loads(body)  # pyright: ignore[reportAny]
+            if "detail" not in parsed or not isinstance(parsed["detail"], str):
+                raise ValueError()
+            error_message = cast(str, parsed["detail"])
+        except json.JSONDecodeError, ValueError:
+            error_message = f"An error occurred while processing your request. status={response.status_code}"
+
+        return await raise_toast(request, ToastException(error_message, type="error"))
     return response

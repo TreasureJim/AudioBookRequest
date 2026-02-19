@@ -14,6 +14,7 @@ download_client: Optional[qBittorrentClient] = None
 async def initialise_global_downloadclient(session: Session):
     global download_client
     if not downclient_config.is_valid(session):
+        logger.debug("Download client config is not valid")
         return
 
     base_url = downclient_config.get_base_url(session)
@@ -26,6 +27,7 @@ async def initialise_global_downloadclient(session: Session):
 
 async def get_global_downloadclient(session: Annotated[Session, Depends(get_session)]):
     if not download_client:
+        logger.debug("Initialised global download client")
         await initialise_global_downloadclient(session)
 
     return download_client

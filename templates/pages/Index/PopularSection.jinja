@@ -1,0 +1,58 @@
+{#def
+    title: str,
+    user: DetailedUser,
+    region_tld: str,
+    view_more: str | None = None,
+    lazy_url: str | None = None,
+    description: str | None = None,
+    empty: str | None = None,
+    auto_start_download: bool = False,
+#}
+
+{% if lazy_url %}
+    <div class="w-full max-w-7xl mb-8"
+         hx-get="{{ base_url }}{{ lazy_url }}"
+         hx-trigger="load"
+         hx-swap="outerHTML">
+        <div class="flex justify-between items-center mb-4">
+            <div>
+                <h2 class="text-2xl font-bold">
+                    {{ title }}
+                </h2>
+                <p class="text-sm opacity-70">
+                    {{ description }}
+                </p>
+            </div>
+            {% if view_more %}
+                <a href="{{ base_url }}{{ view_more }}" class="link link-primary">Discover more →</a>
+            {% endif %}
+        </div>
+    </div>
+{% else %}
+    <div class="w-full max-w-7xl mb-8">
+        <div class="flex justify-between items-center mb-4">
+            <div>
+                <h2 class="text-2xl font-bold">
+                    {{ title }}
+                </h2>
+                <p class="text-sm opacity-70">
+                    {{ description }}
+                </p>
+            </div>
+            {% if view_more %}
+                <a href="{{ base_url }}{{ view_more }}" class="link link-primary">Discover more →</a>
+            {% endif %}
+        </div>
+        <div class="overflow-x-auto">
+            <div id="for-you" class="w-full max-w-7xl mb-8">
+                {% if empty %}
+                    <div class="p-6 bg-base-200 rounded-md text-center">
+                        <p class="text-sm opacity-70">
+                            {{ empty }}
+                        </p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+{% endif %}
