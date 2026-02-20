@@ -1,11 +1,13 @@
+from __future__ import annotations
 import html
 import json
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Annotated, Literal, Union, cast
+from typing import Annotated, Any, ClassVar, Literal, Union, cast
 
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy.orm import relationship
 from sqlmodel import JSON, Column, DateTime, Field, SQLModel, func
 from sqlmodel._compat import SQLModelConfig
 from sqlmodel.main import Relationship
@@ -62,6 +64,40 @@ class User(BaseSQLModel, table=True):
         return self.username == username
 
 
+class AudiobookSeries(BaseSQLModel, table=True):
+    __tablename__: ClassVar[Any] = "audiobook_series"  # pyright: ignore[reportExplicitAny]
+
+    audiobook_asin: str = Field(
+        foreign_key="audiobook.asin", primary_key=True, default=None
+    )
+    series_asin: str = Field(foreign_key="series.asin", primary_key=True, default=None)
+
+    sequence: str | None = None
+
+    audiobook: Audiobook = Relationship(  # pyright: ignore[reportAny]
+        sa_relationship=relationship("Audiobook", back_populates="series_links")
+    )
+    series: Series = Relationship(  # pyright: ignore[reportAny]
+        sa_relationship=relationship("Series", back_populates="audiobook_links")
+    )
+
+
+class Series(BaseSQLModel, table=True):
+    asin: str = Field(primary_key=True)
+    title: str
+    save_path: str | None = None
+
+    audiobooks: list["Audiobook"] = Relationship( # pyright: ignore[reportAny]
+        sa_relationship=relationship(
+            "Audiobook", secondary="audiobook_series", back_populates="series"
+        )
+    )
+
+    audiobook_links: list["AudiobookSeries"] = Relationship( # pyright: ignore[reportAny]
+        sa_relationship=relationship("AudiobookSeries", back_populates="series")
+    )
+
+
 class Audiobook(BaseSQLModel, table=True):
     """A cached Audible audiobook result. Used for both the search results and also linked to via a foreign key for requests."""
 
@@ -83,8 +119,21 @@ class Audiobook(BaseSQLModel, table=True):
         ),
     )
     downloaded: bool = False
+    download_progress: int = 0
 
-    requests: list["AudiobookRequest"] = Relationship(back_populates="audiobook")  # pyright: ignore[reportAny]
+    requests: list["AudiobookRequest"] = Relationship(back_populates="audiobooks")  # pyright: ignore[reportAny]
+
+    series: list["Series"] = Relationship( # pyright: ignore[reportAny]
+        sa_relationship=relationship(
+            "Series",
+            secondary="audiobook_series",
+            back_populates="audiobooks"
+        )
+    )
+    
+    series_links: list["AudiobookSeries"] = Relationship( # pyright: ignore[reportAny]
+        sa_relationship=relationship("AudiobookSeries", back_populates="audiobook")
+    )
 
     model_config: SQLModelConfig = cast(
         SQLModelConfig, cast(object, ConfigDict(arbitrary_types_allowed=True))

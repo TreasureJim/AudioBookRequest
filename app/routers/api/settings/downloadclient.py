@@ -11,7 +11,6 @@ from app.internal.downloadclient.config import downclient_config
 from app.internal.models import GroupEnum
 from app.util.db import get_session
 from app.util.downloadclient import get_global_downloadclient
-from app.util.log import logger
 
 router = APIRouter(prefix="/downloadclient")
 
@@ -85,7 +84,6 @@ async def test_downclient_connection(
     downclient_config.raise_if_invalid(session)
 
     try:
-        logger.debug(f"In API { download_client.is_authorised() }")
         await download_client.login()
     except qBittorrentClient.LoginUnauthorizedException:
         return DownclientLoginResponse(

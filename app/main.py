@@ -15,7 +15,7 @@ from sqlmodel import select
 from starlette.responses import Content
 
 # Initialise logger first
-from app.util.log import logger  # pyright: ignore[reportUnusedImport]
+from app.util.log import logger
 
 from app.internal.audible.search import clear_old_book_caches
 from app.internal.auth.authentication import RequiresLoginException
@@ -32,7 +32,6 @@ from app.routers import api, pages
 from app.util.db import get_session
 from app.util.downloadclient import (
     check_download_progress_task,
-    get_global_downloadclient,
     initialise_global_downloadclient as initialise_downloadclient,
 )
 from app.util.fetch_js import fetch_scripts

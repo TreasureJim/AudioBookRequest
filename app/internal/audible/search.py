@@ -13,6 +13,7 @@ from app.internal.audible.types import (
     audible_region_type,
     audible_regions,
     get_region_from_settings,
+    response_groups_param,
 )
 from app.internal.models import Audiobook, AudiobookRequest
 from app.util.log import logger
@@ -163,7 +164,7 @@ async def search_audible_books(
         "products_sort_by": "Relevance",
         "keywords": query,
         "page": page,
-        "response_groups": ["media"],
+        "response_groups": response_groups_param
     }
 
     try:

@@ -6,9 +6,18 @@ from pydantic import BaseModel
 from typing_extensions import override
 
 from app.internal.env_settings import Settings
-from app.internal.models import Audiobook
+from app.internal.models import Audiobook, AudiobookSeries, Series
 
 REFETCH_TTL = 60 * 60 * 24 * 7  # 1 week
+
+
+def to_response_groups_param(groups_list: list[str]) -> str:
+    return ",".join(groups_list)
+
+
+response_groups = ["media", "series"]
+
+response_groups_param = to_response_groups_param(response_groups)
 
 audible_region_type = Literal[
     "us",
@@ -54,6 +63,16 @@ class AudibleProduct(BaseModel):
     class _Author(BaseModel):
         name: str
 
+    class _Series(BaseModel):
+        asin: str
+        sequence: str
+        title: str
+
+        def to_audiobook_series(self) -> AudiobookSeries:
+            return AudiobookSeries(
+                sequence=self.sequence, series=Series(asin=self.asin, title=self.title)
+            )
+
     asin: str
     authors: list[_Author] = []
     narrators: list[_Author] = []
@@ -62,12 +81,14 @@ class AudibleProduct(BaseModel):
     release_date: str
     title: str
     subtitle: str | None = None
+    series: list[_Series] = []
 
     def to_audiobook(self) -> Audiobook:
         return Audiobook(
             asin=self.asin,
             title=self.title,
             subtitle=self.subtitle,
+            series_links=[series.to_audiobook_series() for series in self.series],
             authors=[author.name for author in self.authors],
             narrators=[narrator.name for narrator in self.narrators],
             cover_image=self.product_images.get("500")

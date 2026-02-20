@@ -21,11 +21,10 @@ from app.internal.audible.types import (
 )
 from app.internal.audiobookshelf.client import background_abs_trigger_scan
 from app.internal.audiobookshelf.config import abs_config
-from app.internal.auth.authentication import APIKeyAuth, DetailedUser
-from app.internal.downloadclient.client import qBittorrentClient
-from app.internal.downloadclient.config import downclient_config
 from app.internal.auth.authentication import AnyAuth, DetailedUser
 from app.internal.db_queries import get_wishlist_results
+from app.internal.downloadclient.client import qBittorrentClient
+from app.internal.downloadclient.config import downclient_config
 from app.internal.models import (
     Audiobook,
     AudiobookRequest,
@@ -40,14 +39,13 @@ from app.internal.notifications import (
     send_all_manual_notifications,
     send_all_notifications,
 )
-from app.internal.prowlarr.prowlarr import start_download
 from app.internal.prowlarr.util import ProwlarrMisconfigured, prowlarr_config
 from app.internal.query import QueryResult, background_start_query, query_sources
 from app.internal.ranking.quality import quality_config
 from app.util.censor import censor
 from app.util.connection import get_connection
 from app.util.db import get_session
-from app.util.downloadclient import download_client, get_global_downloadclient
+from app.util.downloadclient import get_global_downloadclient
 from app.util.log import logger
 from app.util.toast import ToastException
 
@@ -353,8 +351,8 @@ async def download_book(
     body: DownloadSourceBody,
     session: Annotated[Session, Depends(get_session)],
     download_client: Annotated[qBittorrentClient, Depends(get_global_downloadclient)],
-    client_session: Annotated[ClientSession, Depends(get_connection)],
-    admin_user: Annotated[DetailedUser, Security(AnyAuth(GroupEnum.admin))],
+    client_session: Annotated[ClientSession, Depends(get_connection)], # pyright: ignore[reportUnusedParameter]
+    admin_user: Annotated[DetailedUser, Security(AnyAuth(GroupEnum.admin))], # pyright: ignore[reportUnusedParameter]
 ):
     category = downclient_config.get_category(session)
 
