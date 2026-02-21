@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from typing_extensions import override
 
 from app.internal.env_settings import Settings
-from app.internal.models import Audiobook, AudiobookSeries, Series
+from app.internal.models import Audiobook, AudiobookSeriesLink, Series
 
 REFETCH_TTL = 60 * 60 * 24 * 7  # 1 week
 
@@ -68,8 +68,8 @@ class AudibleProduct(BaseModel):
         sequence: str
         title: str
 
-        def to_audiobook_series(self) -> AudiobookSeries:
-            return AudiobookSeries(
+        def to_audiobook_series(self) -> AudiobookSeriesLink:
+            return AudiobookSeriesLink(
                 sequence=self.sequence, series=Series(asin=self.asin, title=self.title)
             )
 
