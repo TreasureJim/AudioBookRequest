@@ -101,6 +101,7 @@ class Audiobook(BaseSQLModel, table=True):
     )
     downloaded: bool = False
     download_progress: int = 0
+    download_client_hash: str | None = None
 
     requests: list["AudiobookRequest"] = Relationship(back_populates="audiobook") # pyright: ignore[reportAny]
 

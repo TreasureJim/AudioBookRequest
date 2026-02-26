@@ -343,6 +343,10 @@ async def list_sources(
     )
     return result
 
+def format_audiobook_str(audiobook: Audiobook) -> str:
+    if len(audiobook.series_links) > 0:
+        return f"{audiobook.title} {audiobook.authors[0]} / ##{audiobook.series_links[0].sequence} {audiobook.series_links[0].series}"
+    return f"{audiobook.title} - {audiobook.authors[0]}"
 
 @router.post("/{asin}/download")
 async def download_book(
@@ -356,11 +360,15 @@ async def download_book(
 ):
     category = downclient_config.get_category(session)
 
-    # TODO: Add logic for renaming torrents
-    # rename_torrent = downclient_config.get_rename_torrents(session)
+    book = session.exec(select(Audiobook).where(Audiobook.asin == asin)).first()
+    if not book:
+        logger.error(f"Could not find a book with asin {asin} and failed to create name for it")
+        rename_torrent = None
+    else:
+        rename_torrent = format_audiobook_str(book)
 
     try:
-        await download_client.start_download(body.guid, category)
+        torrent = await download_client.start_download(body.guid, category, rename_torrent)
     except qBittorrentClient.LoginUnauthorizedException:
         raise HTTPException(
             status_code=500, detail="No valid authorisation for download client"
@@ -368,17 +376,11 @@ async def download_book(
     except qBittorrentClient.UrlInvalid or qBittorrentClient.TorrentFileInvalid:
         raise HTTPException(status_code=400, detail="Torrent URL is invalid")
 
-    book = session.exec(select(Audiobook).where(Audiobook.asin == asin)).first()
     if book:
         book.downloaded = True
+        book.download_client_hash = torrent.hash
         session.add(book)
         session.commit()
-
-    # Wait for prowlarr to finish download probably in another function so we dont slow this request
-    # TODO: ADD postprocessing step here
-
-    if abs_config.is_valid(session):
-        background_task.add_task(background_abs_trigger_scan)
 
     return Response(status_code=204)
 
