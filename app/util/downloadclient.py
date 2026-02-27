@@ -7,7 +7,6 @@ from app.internal.audiobookshelf.client import background_abs_trigger_scan
 from app.internal.audiobookshelf.config import abs_config
 from app.internal.downloadclient.client import qBittorrentClient
 from app.internal.downloadclient.config import downclient_config
-from app.internal.downloadclient.types import TorrentStatus
 from app.internal.models import Audiobook
 from app.util.db import get_session
 from app.util.log import logger
@@ -67,6 +66,7 @@ async def check_books():
         return
     torrents = await down_client.torrent_list(hashes=book_hashes)
 
+    moved_book = False
     for torrent in torrents:
         book = next((book for book in books if book.download_client_hash == torrent.hash), None)
         if not book:
@@ -77,15 +77,13 @@ async def check_books():
 
         book.download_progress = progress
         if progress >= 100:
+            moved_book = True
             await book_download_completed(book, torrent, abs_config_valid)
 
         session.add(book)
 
     session.commit()
-
-async def book_download_completed(book: Audiobook, torrent: TorrentStatus, abs_valid: bool):
-    if abs_valid:
+    if moved_book and abs_valid:
         await background_abs_trigger_scan()
 
-    move_book()
-    raise Unfinished()
+
