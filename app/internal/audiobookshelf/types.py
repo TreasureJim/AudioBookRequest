@@ -2,12 +2,14 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+class ABSFolder(BaseModel):
+    fullPath: str
 
 class ABSLibrary(BaseModel):
     id: str
     name: str
     mediaType: str
-
+    folders: list[ABSFolder]
 
 class ABSBookMinified(BaseModel):
     id: str

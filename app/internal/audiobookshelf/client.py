@@ -4,7 +4,7 @@ import asyncio
 import posixpath
 import re
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Optional
 
 from aiohttp import ClientSession
 from pydantic import BaseModel, TypeAdapter
@@ -55,6 +55,24 @@ async def abs_get_libraries(
         logger.error("ABS: exception fetching libraries", error=str(e))
         return []
 
+async def abs_get_library(library_id: str, session: Session, client_session: ClientSession) -> Optional[ABSLibrary]:
+    base_url = abs_config.get_base_url(session)
+    if not base_url:
+        return None
+    url = posixpath.join(base_url, f"api/libraries/{library_id}")
+    try:
+        async with client_session.get(url, headers=_headers(session)) as resp:
+            if not resp.ok:
+                logger.error(
+                    "ABS: failed to fetch libraries",
+                    status=resp.status,
+                    reason=resp.reason,
+                )
+                return None
+            return ABSLibrary.model_validate(await resp.json())
+    except Exception as e:
+        logger.error("ABS: exception fetching libraries", error=str(e))
+        return None
 
 async def abs_trigger_scan(session: Session, client_session: ClientSession) -> bool:
     base_url = abs_config.get_base_url(session)
