@@ -79,6 +79,7 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
 # Update UI to show progress in downloads page
 # Add page to allow for editing of metadata
 # Good way to start and stop background task when relevant data is updated
+# Handle when there is no asin provided for an author - Maybe just start using our own ids and asin is optional
 
 app = FastAPI(
     title="AudioBookRequest",

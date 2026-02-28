@@ -79,9 +79,12 @@ class AudibleProduct(BaseModel):
                 sequence=self.sequence, series=Series(asin=self.asin, title=self.title)
             )
 
+    class _Narrator(BaseModel):
+        name: str
+
     asin: str
     authors: list[_Author] = []
-    narrators: list[_Author] = []
+    narrators: list[_Narrator] = []
     product_images: dict[str, str] = {}
     runtime_length_min: int = 0
     release_date: str
