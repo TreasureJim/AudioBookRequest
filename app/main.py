@@ -74,8 +74,8 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
 # Settings Page - Done
 # Initialise on startup - Done
 # Actually start download in download client instead of prowlarr - Done
-# Loop to update download progress
-# Identify metadata and move when finished
+# Loop to update download progress - Done
+# Identify metadata and move when finished - Done
 # Update UI to show progress in downloads page
 # Add page to allow for editing of metadata
 

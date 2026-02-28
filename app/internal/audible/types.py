@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from typing_extensions import override
 
 from app.internal.env_settings import Settings
-from app.internal.models import Audiobook, AudiobookSeriesLink, Series
+from app.internal.models import Audiobook, AudiobookAuthorLink, AudiobookSeriesLink, Author, Series
 
 REFETCH_TTL = 60 * 60 * 24 * 7  # 1 week
 
@@ -61,7 +61,13 @@ def get_region_tld_from_settings() -> str:
 
 class AudibleProduct(BaseModel):
     class _Author(BaseModel):
+        asin: str
         name: str
+
+        def to_audiobook_author(self) -> Author:
+            return Author(
+                asin=self.asin, name=self.name
+            )
 
     class _Series(BaseModel):
         asin: str
@@ -89,7 +95,7 @@ class AudibleProduct(BaseModel):
             title=self.title,
             subtitle=self.subtitle,
             series_links=[series.to_audiobook_series() for series in self.series],
-            authors=[author.name for author in self.authors],
+            authors=[author.to_audiobook_author() for author in self.authors],
             narrators=[narrator.name for narrator in self.narrators],
             cover_image=self.product_images.get("500")
             or list(self.product_images.values())[0],

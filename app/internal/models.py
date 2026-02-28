@@ -63,13 +63,24 @@ class User(BaseSQLModel, table=True):
 
 
 class AudiobookSeriesLink(BaseSQLModel, table=True):
-    audiobook_asin: str = Field(foreign_key="audiobook.asin", primary_key=True, default=None)
+    audiobook_asin: str = Field(
+        foreign_key="audiobook.asin", primary_key=True, default=None
+    )
     series_asin: str = Field(foreign_key="series.asin", primary_key=True, default=None)
 
     sequence: str | None = None
 
     audiobook: Audiobook = Relationship(back_populates="series_links")  # pyright: ignore[reportAny]
     series: Series = Relationship(back_populates="audiobook_links")  # pyright: ignore[reportAny]
+
+
+class AudiobookAuthorLink(BaseSQLModel, table=True):
+    audiobook_asin: str = Field(
+        foreign_key="audiobook.asin", primary_key=True, default=None
+    )
+    author_asin: str = Field(
+        foreign_key="author.asin", primary_key=True, default=None
+    )
 
 
 class Series(BaseSQLModel, table=True):
@@ -79,13 +90,26 @@ class Series(BaseSQLModel, table=True):
 
     audiobook_links: list[AudiobookSeriesLink] = Relationship(back_populates="series")  # pyright: ignore[reportAny]
 
+
+class Author(BaseSQLModel, table=True):
+    asin: str = Field(primary_key=True)
+    name: str
+    save_path: str | None = None
+
+    books: list[Audiobook] = Relationship( # pyright: ignore[reportAny]
+        back_populates="authors", link_model=AudiobookAuthorLink
+    ) 
+
+
 class Audiobook(BaseSQLModel, table=True):
     """A cached Audible audiobook result. Used for both the search results and also linked to via a foreign key for requests."""
 
     asin: str = Field(primary_key=True)
     title: str
     subtitle: str | None
-    authors: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    authors: list[Author] = Relationship( # pyright: ignore[reportAny]
+        back_populates="books", link_model=AudiobookAuthorLink
+    ) 
     narrators: list[str] = Field(default_factory=list, sa_column=Column(JSON))
     cover_image: str | None
     release_date: datetime
@@ -103,9 +127,9 @@ class Audiobook(BaseSQLModel, table=True):
     download_progress: int = 0
     download_client_hash: str | None = None
 
-    requests: list["AudiobookRequest"] = Relationship(back_populates="audiobook") # pyright: ignore[reportAny]
+    requests: list[AudiobookRequest] = Relationship(back_populates="audiobook")  # pyright: ignore[reportAny]
 
-    series_links: list[AudiobookSeriesLink] = Relationship(back_populates="audiobook") # pyright: ignore[reportAny]
+    series_links: list[AudiobookSeriesLink] = Relationship(back_populates="audiobook")  # pyright: ignore[reportAny]
 
     model_config: SQLModelConfig = cast(
         SQLModelConfig, cast(object, ConfigDict(arbitrary_types_allowed=True))

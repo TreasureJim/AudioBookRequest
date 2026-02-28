@@ -1,42 +1,66 @@
 import os
-import rapidfuzz
-from rapidfuzz import fuzz, utils
+from pathlib import Path
 import posixpath
 import shutil
 
-from app.internal.models import Audiobook, AudiobookSeriesLink
+import rapidfuzz
+from rapidfuzz import fuzz, utils
+from sqlmodel import Session
 
-def match_book_to_author_path(book: Audiobook, abs_library_paths: list[str]) -> str:
-    """ Returns path of matched author
-        If no author can be matched then it will pick the first author and create folders as needed
+from app.internal.models import Audiobook, AudiobookSeriesLink, Author
+from app.util.log import logger
+
+
+def match_book_to_author_path(
+    session: Session, book: Audiobook, abs_library_paths: list[str]
+) -> Author:
+    """Returns folder path of matched author
+    If no author can be matched then it will pick the first author and generate a theoretical folder name from author name
+    NOTE: it will not create folders
     """
-    # TODO: Check for already saved authors and series
+    saved_author = next(
+        (author for author in book.authors if author.save_path is not None), None
+    )
+    if saved_author:
+        return saved_author
 
     abs_authors: list[str] = []
     abs_authors_full_path: list[str] = []
-    
+
     for path in abs_library_paths:
         dir_scan = os.listdir(path)
         abs_authors.extend(dir_scan)
         abs_authors_full_path.extend([f"{path}/{item}" for item in dir_scan])
 
     author_path = None
+    matched_author = None
     for book_author in book.authors:
-        best_match = rapidfuzz.process.extractOne(book_author, abs_authors, scorer=fuzz.partial_ratio, processor=utils.default_process)
+        best_match = rapidfuzz.process.extractOne(
+            book_author.name,
+            abs_authors,
+            scorer=fuzz.partial_ratio,
+            processor=utils.default_process,
+        )
         if best_match and best_match[1] >= 90:
+            matched_author = book_author
             author_path = abs_authors_full_path[best_match[2]]
             break
 
-    if not author_path:
-        author_path = posixpath.join(abs_library_paths[0], book.authors[0])
-        # Save new author path
-        os.mkdir(author_path)
+    if not author_path or not matched_author:
+        author_path = book.authors[0].name
+        matched_author = book.authors[0]
 
-    return author_path
+    matched_author.save_path = author_path
+    session.add(matched_author)
+    session.commit()
 
-def match_book_to_series(book: Audiobook, author_path: str) -> tuple[str, AudiobookSeriesLink]:
-    """ Returns tuple (path of series folder, matched series from book.series_links)
-        If no series can be matched then it will pick the first series and create folders as needed
+    return matched_author
+
+
+def match_book_to_series(book: Audiobook, author_path: str) -> AudiobookSeriesLink:
+    """Returns matched Series
+    If no series can be matched then it will use the first series in the book and pick a theoretical path for it
+    NOTE: this function does not create folders
     """
     abs_serieses = os.listdir(author_path)
 
@@ -44,7 +68,12 @@ def match_book_to_series(book: Audiobook, author_path: str) -> tuple[str, Audiob
     matched_series = None
     for series_link in book.series_links:
         book_series = series_link.series.title
-        best_match = rapidfuzz.process.extractOne(book_series, abs_serieses, scorer=fuzz.partial_ratio, processor=utils.default_process)
+        best_match = rapidfuzz.process.extractOne(
+            book_series,
+            abs_serieses,
+            scorer=fuzz.partial_ratio,
+            processor=utils.default_process,
+        )
         if best_match and best_match[1] >= 90:
             series_path = posixpath.join(author_path, best_match[0])
             matched_series = book.series_links[best_match[2]]
@@ -53,10 +82,11 @@ def match_book_to_series(book: Audiobook, author_path: str) -> tuple[str, Audiob
     if not series_path or not matched_series:
         series_path = posixpath.join(author_path, book.series_links[0].series.title)
         matched_series = book.series_links[0]
-        # Save new author path
-        os.mkdir(series_path)
 
-    return (series_path, matched_series)
+    matched_series.series.save_path = series_path
+
+    return matched_series
+
 
 class MissingFile(Exception):
     path: str
@@ -65,26 +95,41 @@ class MissingFile(Exception):
         super().__init__(**kargs)
         self.path = path
 
-def hard_link_book(book: Audiobook, abs_library_paths: list[str], torrent_path: str):
+
+def hard_link_book(
+    session: Session, book: Audiobook, abs_library_paths: list[str], torrent_path: str
+):
     if not os.path.exists(torrent_path):
         raise MissingFile(torrent_path)
 
     # author
-    author_path = match_book_to_author_path(book, abs_library_paths)
+    author = match_book_to_author_path(session, book, abs_library_paths)
+    if not author.save_path:
+        logger.error(f"Failed to hard link book: author ({author.name}/{author.asin}) has no save_path")
+        return
     torrent_path_is_folder = not os.path.isfile(torrent_path)
 
     if len(book.series_links) < 0:
-        book_path = posixpath.join(author_path, book.title) 
+        Path(author.save_path).mkdir(parents=True, exist_ok=True)
+        book_path = posixpath.join(author.save_path, book.title)
         if torrent_path_is_folder:
             shutil.copytree(torrent_path, book_path, copy_function=os.link)
         else:
             os.mkdir(book_path)
-            os.link(torrent_path, posixpath.join(book_path, os.path.basename(torrent_path)))
+            os.link(
+                torrent_path, posixpath.join(book_path, os.path.basename(torrent_path))
+            )
 
     # series
-    (series_path, matched_series) = match_book_to_series(book, author_path)
+    series_link = match_book_to_series(book, author.save_path)
+    if not series_link.series.save_path:
+        logger.error(f"Failed to hard link book: series ({series_link.series.title}/{series_link.series.asin}) has not save_path")
+        return
+    Path(series_link.series.save_path).mkdir(parents=True, exist_ok=True)
 
-    book_path = posixpath.join(series_path, f"Book {matched_series.sequence} - {book.title}")
+    book_path = posixpath.join(
+        series_link.series.save_path, f"Book {series_link.sequence} - {book.title}"
+    )
 
     if torrent_path_is_folder:
         shutil.copytree(torrent_path, book_path, copy_function=os.link)
