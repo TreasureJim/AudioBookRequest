@@ -1,8 +1,8 @@
 from abc import ABCMeta, abstractmethod
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing_extensions import override
 
 from app.internal.env_settings import Settings
@@ -61,8 +61,8 @@ def get_region_tld_from_settings() -> str:
 
 class AudibleProduct(BaseModel):
     class _Author(BaseModel):
-        asin: str
         name: str
+        asin: Optional[str] = Field(default=None)
 
         def to_audiobook_author(self) -> Author:
             return Author(
