@@ -23,9 +23,9 @@ async def initialise_global_downloadclient(session: Session):
         return
 
     base_url = downclient_config.get_base_url(session)
-    username = downclient_config.get_username(session)
-    password =  downclient_config.get_password(session)
-    assert base_url is not None and username is not None and password is not None
+    assert base_url
+    username = downclient_config.get_username(session) or ""
+    password =  downclient_config.get_password(session) or ""
 
     download_client = qBittorrentClient(base_url, username, password)
     await download_client.login()
