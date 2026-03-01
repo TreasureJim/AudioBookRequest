@@ -6,7 +6,7 @@ from enum import Enum
 from typing import Annotated, Any, ClassVar, Literal, Union, cast
 
 from pydantic import BaseModel, ConfigDict
-from sqlmodel import JSON, Column, DateTime, Field, SQLModel, func
+from sqlmodel import JSON, Column, DateTime, Field, SQLModel, UniqueConstraint, func
 from sqlmodel._compat import SQLModelConfig
 from sqlmodel.main import Relationship
 
@@ -78,8 +78,8 @@ class AudiobookAuthorLink(BaseSQLModel, table=True):
     audiobook_asin: str = Field(
         foreign_key="audiobook.asin", primary_key=True, default=None
     )
-    author_asin: str = Field(
-        foreign_key="author.asin", primary_key=True, default=None
+    author_id: str = Field(
+        foreign_key="author.id", primary_key=True, default=None
     )
 
 
@@ -92,8 +92,10 @@ class Series(BaseSQLModel, table=True):
 
 
 class Author(BaseSQLModel, table=True):
-    asin: str = Field(primary_key=True)
-    name: str
+    id: int | None = Field(default=None, primary_key=True)
+    # Sometimes authors dont have an asin
+    asin: str | None = Field(unique=True)
+    name: str = Field(unique=True)
     save_path: str | None = None
 
     books: list[Audiobook] = Relationship( # pyright: ignore[reportAny]
