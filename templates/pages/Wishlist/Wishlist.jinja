@@ -79,7 +79,7 @@
                     <td>
                         <div class="flex flex-col">
                             <a preload
-                               href="{{ base_url }}/search?q={{ book.title+' ' +(book.authors|join(",") ) }}"
+                               href="{{ base_url }}/search?q={{ book.title+' ' +(book.authors | map(attribute="name") |join(",") ) }}"
                                class="font-bold text-primary line-clamp-4"
                                title="{{ book.title }}">{{ book.title }}</a>
                             {% if book.subtitle %}
@@ -88,7 +88,7 @@
                         </div>
                     </td>
                     <td>
-                        {{ book.authors|join(", ") }}
+                        {{ book.authors | map(attribute="name") |join(", ") }}
                     </td>
                     <td>
                         {{ book.narrators|join(", ") }}

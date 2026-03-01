@@ -43,7 +43,7 @@
            type="text"
            class="input w-full"
            minlength="1"
-           {% if book %} value="{{ book.authors|join(", ") }}" {% endif %}
+           {% if book %} value="{{ book.authors | map(attribute='name') |join(", ") }}" {% endif %}
            required
            placeholder="J.R.R. Tolkien" />
     <label for="narrator">

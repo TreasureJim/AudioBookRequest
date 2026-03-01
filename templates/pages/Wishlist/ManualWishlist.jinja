@@ -62,7 +62,7 @@
                     {% endif %}
                 </td>
                 <td>
-                    {{ book.authors|join(", ") }}
+                    {{ book.authors | map(attribute='name') |join(", ") }}
                 </td>
                 <td>
                     {{ book.narrators|join(", ") }}

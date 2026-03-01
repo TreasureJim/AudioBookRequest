@@ -65,12 +65,12 @@
         </div>
     {% endif %}
     <div class="text-xs font-semibold line-clamp-1"
-         title="Authors: {{ book.authors | join(", ") }}">
+         title="Authors: {{ book.authors | map(attribute="name") | join(", ") }}">
         {% for author in book.authors[:2] %}
-            <a href="{{ base_url }}/search?q={{ author }}"
-               title="Search for {{ author }}"
+            <a href="{{ base_url }}/search?q={{ author.name }}"
+               title="Search for {{ author.name }}"
                class="hover:underline">
-                {{ author }}
+                {{ author.name }}
             {{- "," if loop.index < book.authors | length and loop.index < 2 else "" -}}</a>
         {% endfor %}
         {% if book.authors | length > 2 %}

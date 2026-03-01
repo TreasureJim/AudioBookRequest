@@ -15,7 +15,7 @@
                 <icons.InfoCircle />
             </span>
             <span>No results found for "{{ result.book.title }}" by
-                {{ result.book.authors|join(",") }}. Might have to be looked up
+                {{ result.book.authors | map(attribute="name") |join(",") }}. Might have to be looked up
             manually.</span>
         </div>
     {% elif not result.ok %}
