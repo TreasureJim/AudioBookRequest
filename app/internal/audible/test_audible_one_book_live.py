@@ -15,7 +15,7 @@ async def test_quick():
         book = await get_single_book(session, asin)
 
         assert book is not None
-        assert len(book.series) > 0
+        assert len(book.series_links) > 0
         
         # Try to print as JSON if possible
         if hasattr(book, 'json'):

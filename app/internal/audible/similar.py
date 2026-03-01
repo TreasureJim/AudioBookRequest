@@ -87,7 +87,7 @@ async def list_similar_audible_books(
                     seed = None
 
             if seed:
-                author = seed.authors[0] if seed.authors else seed.title
+                author = seed.authors[0].name if seed.authors else seed.title
                 results = await search_audible_books(
                     client_session=client_session,
                     query=author,

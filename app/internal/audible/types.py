@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from typing_extensions import override
 
 from app.internal.env_settings import Settings
-from app.internal.models import Audiobook, AudiobookAuthorLink, AudiobookSeriesLink, Author, Series
+from app.internal.models import Audiobook, AudiobookSeriesLink, Author, Series
 
 REFETCH_TTL = 60 * 60 * 24 * 7  # 1 week
 

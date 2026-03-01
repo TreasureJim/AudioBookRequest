@@ -3,10 +3,10 @@ import json
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Annotated, Any, ClassVar, Literal, Union, cast
+from typing import Annotated, Literal, Union, cast
 
 from pydantic import BaseModel, ConfigDict
-from sqlmodel import JSON, Column, DateTime, Field, SQLModel, UniqueConstraint, func
+from sqlmodel import JSON, Column, DateTime, Field, SQLModel, func
 from sqlmodel._compat import SQLModelConfig
 from sqlmodel.main import Relationship
 
@@ -94,13 +94,16 @@ class Series(BaseSQLModel, table=True):
 class Author(BaseSQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     # Sometimes authors dont have an asin
-    asin: str | None = Field(unique=True)
+    asin: str | None = Field(unique=True, default=None)
     name: str = Field(unique=True)
     save_path: str | None = None
 
     books: list[Audiobook] = Relationship( # pyright: ignore[reportAny]
         back_populates="authors", link_model=AudiobookAuthorLink
     ) 
+
+def author_to_name_list(authors: list[Author]) -> list[str]:
+    return [author.name for author in authors]
 
 
 class Audiobook(BaseSQLModel, table=True):

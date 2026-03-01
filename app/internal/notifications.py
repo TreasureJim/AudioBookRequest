@@ -10,6 +10,7 @@ from app.internal.models import (
     Notification,
     NotificationBodyTypeEnum,
     User,
+    author_to_name_list,
 )
 from app.util import json_type
 from app.util.db import get_session
@@ -99,7 +100,7 @@ async def send_notification(
         ).first()
         if book:
             book_title = book.title
-            book_authors = ",".join(book.authors)
+            book_authors = ",".join(author_to_name_list( book.authors ))
             book_narrators = ",".join(book.narrators)
             book_cover = book.cover_image
 

@@ -17,7 +17,7 @@ from app.internal.audiobookshelf.types import (
     ABSLibrary,
     ABSPodcastItem,
 )
-from app.internal.models import Audiobook
+from app.internal.models import Audiobook, Author
 from app.util.connection import USER_AGENT
 from app.util.db import get_session
 from app.util.log import logger
@@ -199,7 +199,7 @@ async def abs_list_library_items(
                 asin=metadata.asin,
                 title=title,
                 subtitle=subtitle,
-                authors=authors,
+                authors=[Author(name=author) for author in authors ],
                 narrators=narrators,
                 cover_image=cover_image,
                 release_date=release_date,
@@ -284,7 +284,7 @@ async def abs_book_exists(
         return False
 
     norm_title = _normalize(book.title)
-    norm_authors = {_normalize(a) for a in book.authors}
+    norm_authors = {_normalize(a.name) for a in book.authors}
 
     for it in candidates:
         # ABS search returns different shapes, try best-effort

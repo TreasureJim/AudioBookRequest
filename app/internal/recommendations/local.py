@@ -6,7 +6,7 @@ from sqlalchemy.sql.elements import KeyedColumnElement
 from sqlalchemy.sql.functions import count
 from sqlmodel import Session, col, func, select
 
-from app.internal.models import Audiobook, AudiobookRequest, AudiobookWithRequests
+from app.internal.models import Audiobook, AudiobookRequest, AudiobookWithRequests, author_to_name_list
 from app.util.log import logger
 
 
@@ -143,7 +143,7 @@ def get_most_popular_authors(
     author_counter = Counter[str]()
     narrator_counter = Counter[str]()
     for book in audiobooks:
-        author_counter.update(book.authors)
+        author_counter.update(author_to_name_list( book.authors ))
         narrator_counter.update(book.narrators)
 
     popular_authors = author_counter.most_common(limit)

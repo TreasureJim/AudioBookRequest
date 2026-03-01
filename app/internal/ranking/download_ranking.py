@@ -7,7 +7,7 @@ from aiohttp import ClientSession
 from rapidfuzz import fuzz, utils
 from sqlmodel import Session
 
-from app.internal.models import Audiobook, ProwlarrSource
+from app.internal.models import Audiobook, ProwlarrSource, author_to_name_list
 from app.internal.ranking.quality import quality_config
 from app.internal.ranking.quality_extract import Quality, extract_qualities
 from app.util.log import logger
@@ -120,13 +120,13 @@ class CompareSource:
         # Check author/narrator match
         author_score = max(
             vaguely_exist_in_title(
-                self.book.authors,
+                author_to_name_list( self.book.authors ),
                 a.source.title,
                 name_ratio,
             ),
             fuzzy_author_narrator_match(
                 a.source.book_metadata.authors,
-                self.book.authors,
+                author_to_name_list( self.book.authors ),
                 name_ratio,
             ),
         )
@@ -244,25 +244,25 @@ class CompareSource:
     def _compare_authors(self, a: RankSource, b: RankSource, next_compare: int) -> int:
         a_score = max(
             vaguely_exist_in_title(
-                self.book.authors,
+                author_to_name_list( self.book.authors ),
                 a.source.title,
                 quality_config.get_name_exists_ratio(self.session),
             ),
             fuzzy_author_narrator_match(
                 a.source.book_metadata.authors,
-                self.book.authors,
+                author_to_name_list( self.book.authors ),
                 quality_config.get_name_exists_ratio(self.session),
             ),
         )
         b_score = max(
             vaguely_exist_in_title(
-                self.book.authors,
+                author_to_name_list( self.book.authors ),
                 b.source.title,
                 quality_config.get_name_exists_ratio(self.session),
             ),
             fuzzy_author_narrator_match(
                 b.source.book_metadata.authors,
-                self.book.authors,
+                author_to_name_list( self.book.authors ),
                 quality_config.get_name_exists_ratio(self.session),
             ),
         )

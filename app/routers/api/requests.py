@@ -19,8 +19,6 @@ from app.internal.audible.types import (
     audible_regions,
     get_region_from_settings,
 )
-from app.internal.audiobookshelf.client import background_abs_trigger_scan
-from app.internal.audiobookshelf.config import abs_config
 from app.internal.auth.authentication import AnyAuth, DetailedUser
 from app.internal.db_queries import get_wishlist_results
 from app.internal.downloadclient.client import qBittorrentClient
@@ -351,7 +349,7 @@ def format_audiobook_str(audiobook: Audiobook) -> str:
 @router.post("/{asin}/download")
 async def download_book(
     asin: str,
-    background_task: BackgroundTasks,
+    # background_task: BackgroundTasks,
     body: DownloadSourceBody,
     session: Annotated[Session, Depends(get_session)],
     download_client: Annotated[qBittorrentClient, Depends(get_global_downloadclient)],

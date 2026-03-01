@@ -1,8 +1,7 @@
 from functools import wraps
 import posixpath
-from shlex import quote
-from typing import Any, Awaitable, Callable, Final, Literal, Optional, ParamSpec, TypeVar
-from urllib.parse import quote_plus, urlencode
+from typing import Any, Awaitable, Callable, Optional, ParamSpec, TypeVar
+from urllib.parse import quote_plus
 from aiohttp import ClientSession
 import aiohttp
 import string
@@ -161,7 +160,7 @@ class qBittorrentClient:
             if resp.status == 415:
                 raise qBittorrentClient.TorrentFileInvalid(torrent_url)
 
-        if torrent := await self.find_torrent(id, recently_added=True, category=category):
+        if torrent := await self.find_torrent(id, recently_added=True):
             return torrent
         else:
             raise qBittorrentClient.DownloadedTorrentNotIdentified(id)
@@ -193,7 +192,7 @@ class qBittorrentClient:
             adapter = TypeAdapter(list[TorrentStatus])
             return adapter.validate_json(await resp.read())
 
-    async def find_torrent(self, id: str, recently_added: bool, category: Optional[str] = None) -> Optional[TorrentStatus]:
+    async def find_torrent(self, id: str, recently_added: bool) -> Optional[TorrentStatus]:
         def filter_torrent(torrent: TorrentStatus) -> bool:
             return id in torrent.name
 

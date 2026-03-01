@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from app.internal.audible.similar import list_similar_audible_books
-from app.internal.models import Audiobook, AudiobookRequest, AudiobookWithRequests, User
+from app.internal.models import Audiobook, AudiobookRequest, AudiobookWithRequests, User, author_to_name_list
 from app.util.censor import censor
 from app.util.log import logger
 
@@ -70,7 +70,7 @@ async def get_user_sims_recommendations(
     user_authors = Counter[str]()
     user_narrators = Counter[str]()
     for sim in user_requests:
-        user_authors.update(sim.authors)
+        user_authors.update(author_to_name_list(sim.authors))
         user_narrators.update(sim.narrators)
 
     seeds = OrderedDict[str, None]()  # ordered set
@@ -153,7 +153,7 @@ async def get_user_sims_recommendations(
         score = (
             W_FREQ * float(count)
             + W_RANK * _rank_component(avg_pos)
-            + W_AUTHOR_PREF * _pref_component(sim.book.authors, user_authors)
+            + W_AUTHOR_PREF * _pref_component(author_to_name_list( sim.book.authors ), user_authors)
             + W_NARR_PREF * _pref_component(sim.book.narrators, user_narrators)
             + W_RECENT * _recent_component(sim.book)
         )
@@ -168,7 +168,7 @@ async def get_user_sims_recommendations(
             reason_parts.append("recommended by Audible sims")
         # Author/Narrator matches
         matched_authors = [
-            a for a in (sim.book.authors or []) if user_authors.get(a, 0) > 0
+            author for author in (author_to_name_list( sim.book.authors ) or []) if user_authors.get(author, 0) > 0
         ]
         if matched_authors:
             # show up to 2
@@ -210,7 +210,7 @@ async def get_user_sims_recommendations(
         if sim.book.asin in added_asins:
             continue
         added_asins.add(sim.book.asin)
-        authors = sim.book.authors or [""]
+        authors = author_to_name_list( sim.book.authors ) or [""]
         # If any author exceeds cap, push to remainder; else accept
         if any(author_counts[a] >= MAX_PER_AUTHOR for a in authors if a):
             remainder.append(sim)

@@ -1,7 +1,7 @@
 from typing import Annotated
 
 from aiohttp import ClientSession
-from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Security
+from fastapi import APIRouter, Depends, Form, HTTPException, Security
 from sqlmodel import Session
 
 from app.internal.auth.authentication import ABRAuth, DetailedUser
@@ -57,7 +57,7 @@ async def list_sources(
 
 @router.post("/{asin}")
 async def download_book(
-    background_task: BackgroundTasks,
+    # background_task: BackgroundTasks,
     asin: str,
     guid: Annotated[str, Form()],
     indexer_id: Annotated[int, Form()],
@@ -68,7 +68,6 @@ async def download_book(
 ):
     body = DownloadSourceBody(guid=guid, indexer_id=indexer_id)
     return await api_download_book(
-        background_task=background_task,
         asin=asin,
         body=body,
         session=session,
