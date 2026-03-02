@@ -131,6 +131,7 @@ async def get_search_suggestions(
 
 
 async def search_audible_books(
+    session: Session,
     client_session: ClientSession,
     query: str,
     num_results: int = 20,
@@ -187,6 +188,8 @@ async def search_audible_books(
 
     # do not fetch book results we already have locally
     books = audible_response.audiobooks()
+    # Match to DB so we can fill the requests field
+    books = [book.match_to_db(session) for book in books]
 
     logger.debug(
         "Search results fetched",

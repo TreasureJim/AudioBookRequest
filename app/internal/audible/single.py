@@ -1,4 +1,5 @@
 from aiohttp import ClientSession
+from sqlmodel import Session
 
 from app.internal.audible.types import (
     AudibleSingleResponse,

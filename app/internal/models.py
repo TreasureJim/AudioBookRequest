@@ -3,10 +3,10 @@ import json
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Annotated, Literal, Union, cast
+from typing import Annotated, Literal, Optional, Union, cast
 
 from pydantic import BaseModel, ConfigDict
-from sqlmodel import JSON, Column, DateTime, Field, SQLModel, func
+from sqlmodel import JSON, Column, DateTime, Field, SQLModel, Session, func, select
 from sqlmodel._compat import SQLModelConfig
 from sqlmodel.main import Relationship
 
@@ -64,9 +64,11 @@ class User(BaseSQLModel, table=True):
 
 class AudiobookSeriesLink(BaseSQLModel, table=True):
     audiobook_asin: str = Field(
-        foreign_key="audiobook.asin", primary_key=True, default=None
+        foreign_key="audiobook.asin", primary_key=True, default=None, ondelete="CASCADE"
     )
-    series_asin: str = Field(foreign_key="series.asin", primary_key=True, default=None)
+    series_asin: str = Field(
+        foreign_key="series.asin", primary_key=True, default=None, ondelete="CASCADE"
+    )
 
     sequence: str | None = None
 
@@ -76,10 +78,10 @@ class AudiobookSeriesLink(BaseSQLModel, table=True):
 
 class AudiobookAuthorLink(BaseSQLModel, table=True):
     audiobook_asin: str = Field(
-        foreign_key="audiobook.asin", primary_key=True, default=None
+        foreign_key="audiobook.asin", primary_key=True, default=None, ondelete="CASCADE"
     )
     author_id: str = Field(
-        foreign_key="author.id", primary_key=True, default=None
+        foreign_key="author.id", primary_key=True, default=None, ondelete="CASCADE"
     )
 
 
@@ -90,6 +92,9 @@ class Series(BaseSQLModel, table=True):
 
     audiobook_links: list[AudiobookSeriesLink] = Relationship(back_populates="series")  # pyright: ignore[reportAny]
 
+    def match_to_db(self, session: Session) -> Optional[Series]:
+        return session.get(Series, self.asin)
+
 
 class Author(BaseSQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
@@ -98,9 +103,17 @@ class Author(BaseSQLModel, table=True):
     name: str = Field(unique=True)
     save_path: str | None = None
 
-    books: list[Audiobook] = Relationship( # pyright: ignore[reportAny]
+    books: list[Audiobook] = Relationship(  # pyright: ignore[reportAny]
         back_populates="authors", link_model=AudiobookAuthorLink
-    ) 
+    )
+
+    def match_to_db(self, session: Session) -> Optional[Author]:
+        if self.id:
+            if match := session.get(Author, self.id):
+                return match
+
+        return session.exec(select(Author).where(Author.name == self.name)).first()
+
 
 def author_to_name_list(authors: list[Author]) -> list[str]:
     return [author.name for author in authors]
@@ -112,9 +125,9 @@ class Audiobook(BaseSQLModel, table=True):
     asin: str = Field(primary_key=True)
     title: str
     subtitle: str | None
-    authors: list[Author] = Relationship( # pyright: ignore[reportAny]
+    authors: list[Author] = Relationship(  # pyright: ignore[reportAny]
         back_populates="books", link_model=AudiobookAuthorLink
-    ) 
+    )
     narrators: list[str] = Field(default_factory=list, sa_column=Column(JSON))
     cover_image: str | None
     release_date: datetime
@@ -132,9 +145,13 @@ class Audiobook(BaseSQLModel, table=True):
     download_progress: int = 0
     download_client_hash: str | None = None
 
-    requests: list[AudiobookRequest] = Relationship(back_populates="audiobook")  # pyright: ignore[reportAny]
+    requests: list[AudiobookRequest] = Relationship(
+        back_populates="audiobook", cascade_delete=True
+    )  # pyright: ignore[reportAny]
 
-    series_links: list[AudiobookSeriesLink] = Relationship(back_populates="audiobook")  # pyright: ignore[reportAny]
+    series_links: list[AudiobookSeriesLink] = Relationship(
+        back_populates="audiobook", cascade_delete=True
+    )  # pyright: ignore[reportAny]
 
     model_config: SQLModelConfig = cast(
         SQLModelConfig, cast(object, ConfigDict(arbitrary_types_allowed=True))
@@ -143,6 +160,20 @@ class Audiobook(BaseSQLModel, table=True):
     @property
     def runtime_length_hrs(self):
         return round(self.runtime_length_min / 60, 1)
+
+    def match_to_db(self, session: Session) -> Audiobook:
+        if match := session.get(Audiobook, self.asin):
+            return match
+
+        for i, author in enumerate(self.authors):
+            if match := author.match_to_db(session):
+                self.authors[i] = match
+
+        for series_link in self.series_links:
+            if match := series_link.series.match_to_db(session):
+                series_link.series = match
+
+        return self
 
 
 class AudiobookWithRequests(BaseModel):
@@ -155,6 +186,13 @@ class AudiobookWithRequests(BaseModel):
         if self.username:
             return any(req.user_username == self.username for req in self.requests)
         return len(self.requests) > 0
+
+    def fill_requests(self, session: Session):
+        self.requests = list(
+            session.exec(
+                select(AudiobookRequest).where(AudiobookRequest.asin == self.book.asin)
+            ).all()
+        )
 
 
 class AudiobookRequest(BaseSQLModel, table=True):

@@ -37,6 +37,7 @@ async def list_combined_audible_books(
         try:
             # Use the existing search function
             term_books = await search_audible_books(
+                session,
                 client_session=client_session,
                 query=term,
                 num_results=books_per_term,

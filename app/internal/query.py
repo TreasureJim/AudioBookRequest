@@ -84,6 +84,7 @@ async def query_sources(
 
         # start download if requested
         if start_auto_download and not book.downloaded and len(ranked) > 0:
+            # TODO: Replace logic with download client
             resp = await start_download(
                 session=session,
                 client_session=client_session,

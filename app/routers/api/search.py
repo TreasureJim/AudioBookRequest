@@ -2,6 +2,7 @@ from typing import Annotated
 
 from aiohttp import ClientSession
 from fastapi import APIRouter, Depends, HTTPException, Query, Security
+from sqlmodel import Session
 
 from app.internal.audible.search import get_search_suggestions, search_audible_books
 from app.internal.audible.types import (
@@ -12,12 +13,14 @@ from app.internal.audible.types import (
 from app.internal.auth.authentication import AnyAuth, DetailedUser
 from app.internal.models import AudiobookWithRequests
 from app.util.connection import get_connection
+from app.util.db import get_session
 
 router = APIRouter(prefix="/search", tags=["Search"])
 
 
 @router.get("", response_model=list[AudiobookWithRequests])
 async def search_books(
+    session: Annotated[Session, Depends(get_session)],
     client_session: Annotated[ClientSession, Depends(get_connection)],
     user: Annotated[DetailedUser, Security(AnyAuth())],
     query: Annotated[str | None, Query(alias="q")] = None,
@@ -31,6 +34,7 @@ async def search_books(
         raise HTTPException(status_code=400, detail="Invalid region")
     if query:
         results = await search_audible_books(
+            session,
             client_session=client_session,
             query=query,
             num_results=num_results,
@@ -40,7 +44,7 @@ async def search_books(
     else:
         results = []
 
-    return [
+    audiobook_with_requests = [
         AudiobookWithRequests(
             book=book,
             requests=book.requests,
@@ -48,6 +52,9 @@ async def search_books(
         )
         for book in results
     ]
+    for request in audiobook_with_requests:
+        request.fill_requests(session)
+    return audiobook_with_requests
 
 
 @router.get("/suggestions", response_model=list[str])

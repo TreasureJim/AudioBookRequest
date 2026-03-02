@@ -42,6 +42,7 @@ async def read_search(
         region = get_region_from_settings()
     try:
         results = await search_books(
+            session,
             client_session=client_session,
             user=user,
             query=query,
@@ -49,7 +50,6 @@ async def read_search(
             page=page,
             region=region,
         )
-
         prowlarr_configured = prowlarr_config.is_valid(session)
 
         return catalog_response(

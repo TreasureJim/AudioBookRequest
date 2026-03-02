@@ -64,7 +64,7 @@ async def list_similar_audible_books(
             response.raise_for_status()
             sims = AudibleSimilarResponse.model_validate(await response.json())
 
-        ordered = sims.audiobooks()
+        ordered = sims.audiobooks(session)
     except Exception as e:
         # Fallback: approximate with author-based search
         logger.debug(
@@ -77,7 +77,7 @@ async def list_similar_audible_books(
             seed = session.get(Audiobook, asin)
             if not seed:
                 try:
-                    seed = await get_single_book(client_session, asin, audible_region)
+                    seed = await get_single_book(client_session, session, asin, audible_region)
                 except Exception as e:
                     logger.error(
                         "Failed to fetch seed book for sims fallback",
@@ -89,6 +89,7 @@ async def list_similar_audible_books(
             if seed:
                 author = seed.authors[0].name if seed.authors else seed.title
                 results = await search_audible_books(
+                    session,
                     client_session=client_session,
                     query=author,
                     num_results=num_results,

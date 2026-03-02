@@ -65,9 +65,7 @@ class AudibleProduct(BaseModel):
         asin: Optional[str] = Field(default=None)
 
         def to_audiobook_author(self) -> Author:
-            return Author(
-                asin=self.asin, name=self.name
-            )
+            return Author(asin=self.asin, name=self.name)
 
     class _Series(BaseModel):
         asin: str

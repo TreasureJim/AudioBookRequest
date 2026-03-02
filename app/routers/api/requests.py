@@ -20,7 +20,7 @@ from app.internal.audible.types import (
     get_region_from_settings,
 )
 from app.internal.auth.authentication import AnyAuth, DetailedUser
-from app.internal.db_queries import get_wishlist_results
+from app.internal.db_queries import get_wishlist_results, match_series_asins
 from app.internal.downloadclient.client import qBittorrentClient
 from app.internal.downloadclient.config import downclient_config
 from app.internal.models import (
@@ -72,16 +72,17 @@ async def create_request(
     book = session.get(Audiobook, asin)
     if not book:
         try:
-            book = await get_single_book(client_session, asin=asin)
-            if book:
-                session.add(book)
-                session.commit()
+            book = (await get_single_book(client_session, asin=asin)).match_to_db( session)
+            session.add(book)
+            session.commit()
+
         except Exception as e:
             logger.error(
                 "Failed to fetch book details from Audible",
                 asin=asin,
                 error=str(e),
             )
+            session.rollback()
         if not book:
             raise HTTPException(status_code=404, detail="Book not found")
 
@@ -94,6 +95,7 @@ async def create_request(
         book_request = AudiobookRequest(asin=asin, user_username=user.username)
         session.add(book_request)
         session.commit()
+
         logger.info(
             "Added new audiobook request",
             username=censor(user.username),
@@ -341,10 +343,12 @@ async def list_sources(
     )
     return result
 
+
 def format_audiobook_str(audiobook: Audiobook) -> str:
     if len(audiobook.series_links) > 0:
         return f"{audiobook.title} {audiobook.authors[0]} / ##{audiobook.series_links[0].sequence} {audiobook.series_links[0].series}"
     return f"{audiobook.title} - {audiobook.authors[0]}"
+
 
 @router.post("/{asin}/download")
 async def download_book(
@@ -353,20 +357,24 @@ async def download_book(
     body: DownloadSourceBody,
     session: Annotated[Session, Depends(get_session)],
     download_client: Annotated[qBittorrentClient, Depends(get_global_downloadclient)],
-    client_session: Annotated[ClientSession, Depends(get_connection)], # pyright: ignore[reportUnusedParameter]
-    admin_user: Annotated[DetailedUser, Security(AnyAuth(GroupEnum.admin))], # pyright: ignore[reportUnusedParameter]
+    client_session: Annotated[ClientSession, Depends(get_connection)],  # pyright: ignore[reportUnusedParameter]
+    admin_user: Annotated[DetailedUser, Security(AnyAuth(GroupEnum.admin))],  # pyright: ignore[reportUnusedParameter]
 ):
     category = downclient_config.get_category(session)
 
     book = session.exec(select(Audiobook).where(Audiobook.asin == asin)).first()
     if not book:
-        logger.error(f"Could not find a book with asin {asin} and failed to create name for it")
+        logger.error(
+            f"Could not find a book with asin {asin} and failed to create name for it"
+        )
         rename_torrent = None
     else:
         rename_torrent = format_audiobook_str(book)
 
     try:
-        torrent = await download_client.start_download(body.guid, category, rename_torrent)
+        torrent = await download_client.start_download(
+            body.guid, category, rename_torrent
+        )
     except qBittorrentClient.LoginUnauthorizedException:
         raise HTTPException(
             status_code=500, detail="No valid authorisation for download client"

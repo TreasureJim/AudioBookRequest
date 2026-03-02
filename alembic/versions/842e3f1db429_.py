@@ -1,8 +1,8 @@
 """
 
-Revision ID: b4ee6c309a89
+Revision ID: 842e3f1db429
 Revises: d0fac85afd0f
-Create Date: 2026-03-01 16:53:13.070805
+Create Date: 2026-03-02 00:45:51.337775
 
 """
 from typing import Sequence, Union
@@ -13,7 +13,7 @@ import sqlmodel
 from sqlalchemy.dialects import sqlite
 
 # revision identifiers, used by Alembic.
-revision: str = 'b4ee6c309a89'
+revision: str = '842e3f1db429'
 down_revision: Union[str, None] = 'd0fac85afd0f'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -26,7 +26,9 @@ def upgrade() -> None:
     sa.Column('asin', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
     sa.Column('name', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.Column('save_path', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
-    sa.PrimaryKeyConstraint('id')
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('asin'),
+    sa.UniqueConstraint('name')
     )
     op.create_table('series',
     sa.Column('asin', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
@@ -45,7 +47,7 @@ def upgrade() -> None:
     sa.Column('audiobook_asin', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.Column('series_asin', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.Column('sequence', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
-    sa.ForeignKeyConstraint(['audiobook_asin'], ['audiobook.asin'], ),
+    sa.ForeignKeyConstraint(['audiobook_asin'], ['audiobook.asin'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['series_asin'], ['series.asin'], ),
     sa.PrimaryKeyConstraint('audiobook_asin', 'series_asin')
     )

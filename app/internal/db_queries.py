@@ -3,13 +3,14 @@ from typing import Literal, Sequence, cast
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import InstrumentedAttribute, selectinload
-from sqlmodel import Session, asc, col, not_, select
+from sqlmodel import Session, asc, col, not_, or_, select
 
 from app.internal.models import (
     Audiobook,
     AudiobookRequest,
     AudiobookWishlistResult,
     ManualBookRequest,
+    Series,
     User,
 )
 
@@ -114,4 +115,10 @@ def get_all_manual_requests(
             col(ManualBookRequest.user_username).is_not(None),
         )
         .order_by(asc(ManualBookRequest.downloaded))
+    ).all()
+
+def match_series_asins(session: Session, asins: list[str]) -> Sequence[Series]:
+    return session.exec(
+        select(Series)
+        .where(or_(*[Series.asin == asin for asin in asins]))
     ).all()
