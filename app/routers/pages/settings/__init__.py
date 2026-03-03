@@ -9,7 +9,8 @@ from . import (
     prowlarr,
     security,
     users,
-    downloadclient
+    downloadclient,
+    postprocessing
 )
 
 router = APIRouter(prefix="/settings")
@@ -23,3 +24,4 @@ router.include_router(notification.router)
 router.include_router(prowlarr.router)
 router.include_router(security.router)
 router.include_router(users.router)
+router.include_router(postprocessing.router)

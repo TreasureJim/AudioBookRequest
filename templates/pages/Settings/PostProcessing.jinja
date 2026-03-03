@@ -1,0 +1,118 @@
+{#def
+    user: DetailedUser,
+    auto_moving: bool,
+    auto_moving_config_valid: bool,
+    required_folders: Folders
+#}
+
+<SettingsLayout user={{ user }} page="postprocessing" title="Settings - Post Processing">
+<js.AlpineJS />
+
+<div class="flex flex-col gap-6">
+    <!-- Header with description -->
+    <div class="border-b border-base-300 pb-4">
+        <h2 class="text-2xl font-semibold">Post Processing</h2>
+        <p class="text-sm opacity-70 mt-1">Configure how downloaded books are processed and organized</p>
+    </div>
+
+    <!-- Auto-copy Section -->
+    <div class="card bg-base-200/50 rounded-lg p-6">
+        <div class="form-control">
+            <label class="label cursor-pointer justify-start gap-4">
+                <span class="label-text font-medium text-lg">Auto-copy downloaded books to Audiobookshelf</span>
+                <input hx-put="{{ base_url }}/settings/postprocessing/hx-check-auto-moving"
+                       type="checkbox"
+                       name="check_auto_moving"
+                       class="toggle toggle-primary"
+                       {% if auto_moving %}checked{% endif %}
+                       {% if not auto_moving_config_valid %}disabled{% endif %}
+                       hx-trigger="change"
+                       hx-target="#auto-moving-status"
+                       hx-swap="outerHTML" />
+            </label>
+            
+            <p class="text-sm opacity-70 mt-2 ml-2">
+                <span class="inline-block mr-1">ℹ️</span>
+                Uses your download client to detect finished downloads and Audiobookshelf to automatically 
+                find the correct folder and link/copy the files to the destination.
+            </p>
+
+            {% if not auto_moving_config_valid %}
+            <div class="alert alert-warning mt-4 flex items-start gap-3" id="auto-moving-status">
+                <span class="text-xl">⚠️</span>
+                <div class="flex flex-col">
+                    <span class="font-medium">Configuration Required</span>
+                    <span class="text-sm">Requires both Audiobookshelf and download client to be configured to enable this feature.</span>
+                    <a href="{{ base_url }}/settings" class="link link-primary text-sm mt-2">Go to Settings →</a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Folder Status Section -->
+    {% if auto_moving %}
+    <div class="card bg-base-200/50 rounded-lg p-6" x-data="{ expanded: true }">
+        <div class="flex items-center justify-between cursor-pointer" @click="expanded = !expanded">
+            <h3 class="text-lg font-medium">Required Folder Access</h3>
+            <button class="btn btn-ghost btn-sm">
+                <span x-show="expanded">▼</span>
+                <span x-show="!expanded">▶</span>
+            </button>
+        </div>
+        
+        <div class="mt-4 space-y-3" x-show="expanded" x-transition.duration.300ms>
+            {% for folder in required_folders %}
+            <div class="flex items-center gap-3 p-3 bg-base-300/30 rounded-lg hover:bg-base-300/50 transition-colors">
+                <div class="flex-shrink-0">
+                    {% if folder.accessible %}
+                    <span class="text-success text-xl" title="Accessible">✓</span>
+                    {% else %}
+                    <span class="text-error text-xl" title="Not accessible">✗</span>
+                    {% endif %}
+                </div>
+                
+                <div class="flex-grow min-w-0">
+                    <div class="font-mono text-sm truncate" title="{{ folder.path }}">
+                        {{ folder.path }}
+                    </div>
+                    <div class="text-xs opacity-60 mt-0.5">
+                        {% if folder.accessible %}
+                        Read/Write access confirmed
+                        {% else %}
+                        Permission denied or folder doesn't exist
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+
+            <!-- Summary -->
+            <div class="mt-4 p-3 bg-base-300/40 rounded-lg text-sm">
+                {% set accessible_count = required_folders|selectattr('accessible', 'equalto', true)|list|length %}
+                {% set total_count = required_folders|length %}
+                
+                <div class="flex items-center justify-between">
+                    <span>Folder Access Summary</span>
+                    <span class="font-medium">
+                        {% if accessible_count == total_count %}
+                        <span class="text-success">✓ All folders accessible</span>
+                        {% else %}
+                        <span class="text-warning">⚠️ {{ accessible_count }}/{{ total_count }} folders accessible</span>
+                        {% endif %}
+                    </span>
+                </div>
+                
+                {% if accessible_count < total_count %}
+                <progress class="progress progress-warning w-full mt-2" 
+                          value="{{ accessible_count }}" 
+                          max="{{ total_count }}"></progress>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+
+</SettingsLayout>

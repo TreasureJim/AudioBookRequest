@@ -39,10 +39,10 @@ from app.util.redirect import BaseUrlRedirectResponse
 from app.util.templates import catalog_response
 from app.util.toast import ToastException
 
-import logging
-logging.basicConfig()
-sql_logger = logging.getLogger('sqlalchemy.engine')
-sql_logger.setLevel(logging.DEBUG)
+# import logging
+# logging.basicConfig()
+# sql_logger = logging.getLogger('sqlalchemy.engine')
+# sql_logger.setLevel(logging.DEBUG)
 
 # intialize js dependencies or throw an error if not in debug mode
 fetch_scripts(Settings().app.debug)
@@ -56,7 +56,7 @@ with next(get_session()) as session:
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
     await initialise_downloadclient(session)
-    sql_logger.info("Download client initialized.")
+    logger.info("Download client initialized.")
 
     stop_event = asyncio.Event()
     # downloadclient_progress_update_task = asyncio.create_task(

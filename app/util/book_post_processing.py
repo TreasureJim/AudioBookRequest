@@ -3,10 +3,13 @@ from pathlib import Path
 import posixpath
 import shutil
 
+import aiohttp
 import rapidfuzz
 from rapidfuzz import fuzz, utils
 from sqlmodel import Session
 
+from app.internal.audiobookshelf.client import abs_get_library
+from app.internal.audiobookshelf.config import abs_config
 from app.internal.models import Audiobook, AudiobookSeriesLink, Author
 from app.util.log import logger
 
@@ -136,3 +139,6 @@ def hard_link_book(
     else:
         os.mkdir(book_path)
         os.link(torrent_path, posixpath.join(book_path, os.path.basename(torrent_path)))
+
+async def check_abs_paths_available(library_id: str, session: Session, client_session: ClientSession) -> list[(bool, str)]:
+    library = abs_get_library(library_id, session)

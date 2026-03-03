@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import posixpath
 import re
 from datetime import datetime
@@ -55,7 +56,10 @@ async def abs_get_libraries(
         logger.error("ABS: exception fetching libraries", error=str(e))
         return []
 
-async def abs_get_library(library_id: str, session: Session, client_session: ClientSession) -> Optional[ABSLibrary]:
+
+async def abs_get_library(
+    library_id: str, session: Session, client_session: ClientSession
+) -> Optional[ABSLibrary]:
     base_url = abs_config.get_base_url(session)
     if not base_url:
         return None
@@ -74,6 +78,7 @@ async def abs_get_library(library_id: str, session: Session, client_session: Cli
         logger.error("ABS: exception fetching libraries", error=str(e))
         return None
 
+
 async def abs_trigger_scan(session: Session, client_session: ClientSession) -> bool:
     base_url = abs_config.get_base_url(session)
     lib_id = abs_config.get_library_id(session)
@@ -88,6 +93,27 @@ async def abs_trigger_scan(session: Session, client_session: ClientSession) -> b
             )
             return False
         return True
+
+
+async def check_abs_paths_available(
+    session: Session, client_session: ClientSession
+) -> Optional[list[tuple[str, bool]]]:
+    library_id = abs_config.get_library_id(session)
+    if not library_id:
+        return None
+    library = await abs_get_library(library_id, session, client_session)
+    if not library:
+        return None
+    folders = [folder.fullPath for folder in library.folders]
+
+    def path_ok(path: str) -> bool:
+        return (
+            os.access(path, os.F_OK)
+            and os.access(path, os.R_OK)
+            and os.access(path, os.W_OK)
+        )
+
+    return [(folder, path_ok(folder)) for folder in folders]
 
 
 async def background_abs_trigger_scan():
@@ -199,7 +225,7 @@ async def abs_list_library_items(
                 asin=metadata.asin,
                 title=title,
                 subtitle=subtitle,
-                authors=[Author(name=author) for author in authors ],
+                authors=[Author(name=author) for author in authors],
                 narrators=narrators,
                 cover_image=cover_image,
                 release_date=release_date,
