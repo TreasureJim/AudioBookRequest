@@ -48,9 +48,12 @@ async def list_similar_audible_books(
     cache_result = sims_cache.get(cache_key)
     if cache_result and time.time() - cache_result.timestamp < REFETCH_TTL:
         # Merge cached ORM instances into the current session to avoid cross-session attachment errors
-        merged = [session.merge(book) for book in cache_result.value]
-        logger.debug("Using cached popular books", region=audible_region)
-        return merged
+        try:
+            merged = [session.merge(book.match_to_db(session)) for book in cache_result.value]
+            logger.debug("Using cached popular books", region=audible_region)
+            return merged
+        except(Exception):
+            session.rollback()
 
     base_url = f"https://api.audible{audible_regions[audible_region]}/1.0/catalog/products/{asin}/sims"
     params = {
@@ -64,7 +67,7 @@ async def list_similar_audible_books(
             response.raise_for_status()
             sims = AudibleSimilarResponse.model_validate(await response.json())
 
-        ordered = sims.audiobooks(session)
+        ordered = sims.audiobooks()
     except Exception as e:
         # Fallback: approximate with author-based search
         logger.debug(
@@ -77,7 +80,7 @@ async def list_similar_audible_books(
             seed = session.get(Audiobook, asin)
             if not seed:
                 try:
-                    seed = await get_single_book(client_session, session, asin, audible_region)
+                    seed = await get_single_book(client_session, asin, audible_region)
                 except Exception as e:
                     logger.error(
                         "Failed to fetch seed book for sims fallback",

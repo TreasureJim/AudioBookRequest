@@ -6,6 +6,7 @@ from enum import Enum
 from typing import Annotated, Literal, Optional, Union, cast
 
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy.orm import relationship
 from sqlmodel import JSON, Column, DateTime, Field, SQLModel, Session, func, select
 from sqlmodel._compat import SQLModelConfig
 from sqlmodel.main import Relationship
@@ -145,13 +146,14 @@ class Audiobook(BaseSQLModel, table=True):
     download_progress: int = 0
     download_client_hash: str | None = None
 
-    requests: list[AudiobookRequest] = Relationship(
-        back_populates="audiobook", cascade_delete=True
-    )  # pyright: ignore[reportAny]
+    requests: list[AudiobookRequest] = Relationship(  # pyright: ignore[reportAny]
+        back_populates="audiobook",
+        sa_relationship=relationship(cascade="all, delete-orphan"),
+    )
 
-    series_links: list[AudiobookSeriesLink] = Relationship(
+    series_links: list[AudiobookSeriesLink] = Relationship( # pyright: ignore[reportAny]
         back_populates="audiobook", cascade_delete=True
-    )  # pyright: ignore[reportAny]
+    ) 
 
     model_config: SQLModelConfig = cast(
         SQLModelConfig, cast(object, ConfigDict(arbitrary_types_allowed=True))
