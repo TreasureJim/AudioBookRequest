@@ -11,6 +11,8 @@ from sqlmodel import JSON, Column, DateTime, Field, SQLModel, Session, func, sel
 from sqlmodel._compat import SQLModelConfig
 from sqlmodel.main import Relationship
 
+from app.util.log import logger
+
 
 class BaseSQLModel(SQLModel):
     pass
@@ -113,7 +115,19 @@ class Author(BaseSQLModel, table=True):
             if match := session.get(Author, self.id):
                 return match
 
-        return session.exec(select(Author).where(Author.name == self.name)).first()
+        if self.asin:
+            logger.debug("Failed to match author to ID, matching to asin")
+            matched_author = session.exec(select(Author).where(Author.asin == self.asin)).first()
+            if matched_author:
+                logger.debug("Matched author by asin: %s", matched_author)
+                return matched_author
+
+
+        logger.debug("Failed to match author to ID, matching to name")
+        matched_author = session.exec(select(Author).where(Author.name == self.name)).first()
+        if matched_author:
+            logger.debug("Matched author by name: %s", matched_author)
+        return matched_author
 
 
 def author_to_name_list(authors: list[Author]) -> list[str]:
