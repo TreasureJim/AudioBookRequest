@@ -37,7 +37,7 @@ async def get_global_downloadclient(session: Annotated[Session, Depends(get_sess
 
     return download_client
 
-async def timeout_event(event: asyncio.Event, timeout: int):
+async def timeout_event(event: asyncio.Event, timeout: float):
     try:
         await asyncio.wait_for(event.wait(), timeout=timeout) # Wait for x seconds or until stopped
     except asyncio.TimeoutError:
@@ -45,10 +45,14 @@ async def timeout_event(event: asyncio.Event, timeout: int):
 
 async def check_download_progress_task(stop_event: asyncio.Event):
     """A task that runs every 5 seconds until stopped."""
+
+    session = next(get_session())
+    if not downclient_config.is_valid(session):
+        return
+
     task_id = id(asyncio.current_task()) # Unique ID for this task instance
     logger.debug(f"Background task {task_id} started.")
     try:
-        session = next(get_session())
         abs_library_id = abs_config.get_library_id(session)
         if not abs_library_id:
             return
@@ -61,12 +65,12 @@ async def check_download_progress_task(stop_event: asyncio.Event):
             down_client = await get_global_downloadclient(session)
             if not down_client:
                 logger.error("Background task: Could not access download client. Timing out 30s")
-                await timeout_event(stop_event, 30)
+                await timeout_event(stop_event, 30.0)
                 continue
 
             await check_books(session, down_client, abs_folders)
 
-            await timeout_event(stop_event, 5)
+            await timeout_event(stop_event, 5.0)
             
     except asyncio.CancelledError:
         print(f"Background task {task_id} cancelled.")

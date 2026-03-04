@@ -1,7 +1,7 @@
 {#def
     user: DetailedUser,
     auto_moving: bool,
-    auto_moving_config_valid: bool,
+    auto_moving_dependencies_valid: bool,
     required_folders: Folders
 #}
 
@@ -10,7 +10,7 @@
 
 <div class="flex flex-col gap-6">
     <!-- Header with description -->
-    <div class="border-b border-base-300 pb-4">
+    <div class="">
         <h2 class="text-2xl font-semibold">Post Processing</h2>
         <p class="text-sm opacity-70 mt-1">Configure how downloaded books are processed and organized</p>
     </div>
@@ -18,18 +18,23 @@
     <!-- Auto-copy Section -->
     <div class="card bg-base-200/50 rounded-lg p-6">
         <div class="form-control">
-            <label class="label cursor-pointer justify-start gap-4">
-                <span class="label-text font-medium text-lg">Auto-copy downloaded books to Audiobookshelf</span>
-                <input hx-put="{{ base_url }}/settings/postprocessing/hx-check-auto-moving"
-                       type="checkbox"
-                       name="check_auto_moving"
-                       class="toggle toggle-primary"
-                       {% if auto_moving %}checked{% endif %}
-                       {% if not auto_moving_config_valid %}disabled{% endif %}
-                       hx-trigger="change"
-                       hx-target="#auto-moving-status"
-                       hx-swap="outerHTML" />
-            </label>
+            <form hx-put="{{ base_url }}/settings/postprocessing/hx-check-auto-moving"
+                  hx-trigger="change"
+                  class="form-control">
+                <label class="label cursor-pointer justify-start gap-4">
+                    <span class="label-text font-medium text-lg">Auto-copy downloaded books to Audiobookshelf</span>
+                    <div class="relative">
+                        <input type="hidden" name="check_auto_moving" value="false">
+                        <input type="checkbox"
+                               name="check_auto_moving"
+                               value="true"
+                               class="toggle toggle-primary"
+                               {% if auto_moving %}checked{% endif %}
+                               {% if not auto_moving_dependencies_valid %}disabled{% endif %}
+                               />
+                    </div>
+                </label>
+            </form>
             
             <p class="text-sm opacity-70 mt-2 ml-2">
                 <span class="inline-block mr-1">ℹ️</span>
@@ -37,13 +42,14 @@
                 find the correct folder and link/copy the files to the destination.
             </p>
 
-            {% if not auto_moving_config_valid %}
+            {% if not auto_moving_dependencies_valid %}
             <div class="alert alert-warning mt-4 flex items-start gap-3" id="auto-moving-status">
                 <span class="text-xl">⚠️</span>
                 <div class="flex flex-col">
                     <span class="font-medium">Configuration Required</span>
                     <span class="text-sm">Requires both Audiobookshelf and download client to be configured to enable this feature.</span>
-                    <a href="{{ base_url }}/settings" class="link link-primary text-sm mt-2">Go to Settings →</a>
+                    <a href="{{ base_url }}/settings/downloadclient" class="link link-primary text-sm mt-2">Go to Download Client Settings →</a>
+                    <a href="{{ base_url }}/settings/audiobookshelf" class="link link-primary text-sm mt-2">Go to Audiobookshelf Settings →</a>
                 </div>
             </div>
             {% endif %}
@@ -52,16 +58,10 @@
 
     <!-- Folder Status Section -->
     {% if auto_moving %}
-    <div class="card bg-base-200/50 rounded-lg p-6" x-data="{ expanded: true }">
-        <div class="flex items-center justify-between cursor-pointer" @click="expanded = !expanded">
-            <h3 class="text-lg font-medium">Required Folder Access</h3>
-            <button class="btn btn-ghost btn-sm">
-                <span x-show="expanded">▼</span>
-                <span x-show="!expanded">▶</span>
-            </button>
-        </div>
+    <div class="card bg-base-200/50 rounded-lg p-6">
+        <h3 class="text-lg font-medium">Required Folder Access</h3>
         
-        <div class="mt-4 space-y-3" x-show="expanded" x-transition.duration.300ms>
+        <div class="mt-4 space-y-3">
             {% for folder in required_folders %}
             <div class="flex items-center gap-3 p-3 bg-base-300/30 rounded-lg hover:bg-base-300/50 transition-colors">
                 <div class="flex-shrink-0">

@@ -95,9 +95,13 @@ async def abs_trigger_scan(session: Session, client_session: ClientSession) -> b
         return True
 
 
-async def check_abs_paths_available(
+class FolderAvailability(BaseModel):
+    path: str
+    accessible: bool
+
+async def abs_check_paths_available(
     session: Session, client_session: ClientSession
-) -> Optional[list[tuple[str, bool]]]:
+) -> Optional[list[FolderAvailability]]:
     library_id = abs_config.get_library_id(session)
     if not library_id:
         return None
@@ -106,6 +110,9 @@ async def check_abs_paths_available(
         return None
     folders = [folder.fullPath for folder in library.folders]
 
+    # TODO REMOVE AFTER TESTING
+    folders = ["./books"]
+
     def path_ok(path: str) -> bool:
         return (
             os.access(path, os.F_OK)
@@ -113,7 +120,7 @@ async def check_abs_paths_available(
             and os.access(path, os.W_OK)
         )
 
-    return [(folder, path_ok(folder)) for folder in folders]
+    return [FolderAvailability(path=folder, accessible=path_ok(folder)) for folder in folders]
 
 
 async def background_abs_trigger_scan():
