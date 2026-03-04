@@ -23,7 +23,6 @@ class ABSConfig(StringConfigCache[ABSConfigKey]):
             self.get_base_url(session) is not None
             and self.get_api_token(session) is not None
             and self.get_library_id(session) is not None
-            and self.get_check_downloaded(session)
         )
 
     def raise_if_invalid(self, session: Session):
@@ -33,10 +32,6 @@ class ABSConfig(StringConfigCache[ABSConfigKey]):
             raise AudiobookshelfMisconfigured("Audiobookshelf API token not set")
         if not self.get_library_id(session):
             raise AudiobookshelfMisconfigured("Audiobookshelf library not selected")
-        if not self.get_check_downloaded(session):
-            raise AudiobookshelfMisconfigured(
-                "Audiobookshelf check-downloaded disabled"
-            )
 
     def get_base_url(self, session: Session) -> Optional[str]:
         path = self.get(session, "abs_base_url")
