@@ -59,11 +59,9 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Download client initialized.")
 
     stop_event = asyncio.Event()
-    # downloadclient_progress_update_task = asyncio.create_task(
-    #     check_download_progress_task(stop_event)
-    # )
-    yield
-    return
+    downloadclient_progress_update_task = asyncio.create_task(
+        check_download_progress_task(stop_event)
+    )
 
     yield
 

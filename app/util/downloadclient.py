@@ -4,7 +4,10 @@ from typing import Annotated, Optional, cast
 import aiohttp
 from fastapi import Depends
 from sqlmodel import Session, select
-from app.internal.audiobookshelf.client import abs_get_library, background_abs_trigger_scan
+from app.internal.audiobookshelf.client import (
+    abs_get_library,
+    background_abs_trigger_scan,
+)
 from app.internal.audiobookshelf.config import abs_config
 from app.internal.downloadclient.client import qBittorrentClient
 from app.internal.downloadclient.config import downclient_config
@@ -16,6 +19,7 @@ from app.util.log import logger
 
 download_client: Optional[qBittorrentClient] = None
 
+
 async def initialise_global_downloadclient(session: Session):
     global download_client
     if not downclient_config.is_valid(session):
@@ -25,10 +29,11 @@ async def initialise_global_downloadclient(session: Session):
     base_url = downclient_config.get_base_url(session)
     assert base_url
     username = downclient_config.get_username(session) or ""
-    password =  downclient_config.get_password(session) or ""
+    password = downclient_config.get_password(session) or ""
 
     download_client = qBittorrentClient(base_url, username, password)
     await download_client.login()
+
 
 async def get_global_downloadclient(session: Annotated[Session, Depends(get_session)]):
     if not download_client:
@@ -37,11 +42,15 @@ async def get_global_downloadclient(session: Annotated[Session, Depends(get_sess
 
     return download_client
 
+
 async def timeout_event(event: asyncio.Event, timeout: float):
     try:
-        await asyncio.wait_for(event.wait(), timeout=timeout) # Wait for x seconds or until stopped
+        await asyncio.wait_for(
+            event.wait(), timeout=timeout
+        )  # Wait for x seconds or until stopped
     except asyncio.TimeoutError:
-        pass 
+        pass
+
 
 async def check_download_progress_task(stop_event: asyncio.Event):
     """A task that runs every 5 seconds until stopped."""
@@ -50,7 +59,7 @@ async def check_download_progress_task(stop_event: asyncio.Event):
     if not downclient_config.is_valid(session):
         return
 
-    task_id = id(asyncio.current_task()) # Unique ID for this task instance
+    task_id = id(asyncio.current_task())  # Unique ID for this task instance
     logger.debug(f"Background task {task_id} started.")
     try:
         abs_library_id = abs_config.get_library_id(session)
@@ -60,27 +69,42 @@ async def check_download_progress_task(stop_event: asyncio.Event):
             abs_library = await abs_get_library(abs_library_id, session, client_session)
             if not abs_library:
                 return
-            abs_folders = [folder.fullPath for folder in abs_library.folders]
+            # abs_folders = [folder.fullPath for folder in abs_library.folders]
+            # TODO REMOVE AFTER TESTING
+            abs_folders = ["./books"]
         while not stop_event.is_set():
             down_client = await get_global_downloadclient(session)
             if not down_client:
-                logger.error("Background task: Could not access download client. Timing out 30s")
+                logger.error(
+                    "Background task: Could not access download client. Timing out 30s"
+                )
                 await timeout_event(stop_event, 30.0)
                 continue
 
             await check_books(session, down_client, abs_folders)
 
             await timeout_event(stop_event, 5.0)
-            
-    except asyncio.CancelledError:
-        print(f"Background task {task_id} cancelled.")
-    finally:
-        print(f"Background task {task_id} stopped.")
 
-async def check_books(session: Session, download_client: qBittorrentClient, abs_folders: list[str]):
+    except asyncio.CancelledError:
+        logger.info(f"Background task {task_id} cancelled.")
+    except Exception as e:
+        logger.error("Background task ran into exception: %s", e)
+    finally:
+        logger.info(f"Background task {task_id} stopped.")
+
+
+async def check_books(
+    session: Session, download_client: qBittorrentClient, abs_folders: list[str]
+):
     # Find books where download has started or finished
-    books = session.exec(select(Audiobook).where(Audiobook.downloaded).where(Audiobook.download_client_hash is not None)).all()
-    book_hashes = [book.download_client_hash for book in books if book.download_client_hash]
+    books = session.exec(
+        select(Audiobook)
+        .where(Audiobook.downloaded)
+        .where(Audiobook.download_client_hash is not None)
+    ).all()
+    book_hashes = [
+        book.download_client_hash for book in books if book.download_client_hash
+    ]
 
     torrents = await download_client.torrent_list(hashes=book_hashes)
     torrent_dict = {torrent.hash: torrent for torrent in torrents}
@@ -89,20 +113,24 @@ async def check_books(session: Session, download_client: qBittorrentClient, abs_
     for book in books:
         torrent = torrent_dict.get(cast(str, book.download_client_hash))
         if not torrent:
-            logger.warning(f"Checking books: could not find book hash ( {book.title} - {book.download_client_hash} ) in download client. Removing from downloaded.")
+            logger.warning(
+                f"Checking books: could not find book hash ( {book.title} - {book.download_client_hash} ) in download client. Removing from downloaded."
+            )
             book.downloaded = False
             book.download_progress = 0
             book.download_client_hash = None
             continue
-        
-        book.download_progress = int(torrent.progress)
+
+        book.download_progress = torrent.progress_percentage()
 
         if book.download_progress >= 100:
             moved_book = True
             try:
                 hard_link_book(session, book, abs_folders, torrent.content_path)
-            except(MissingFile) as e:
-                logger.warning(f"Checking books: Could not find book ( {book.title} - {book.download_client_hash} ) torrent path at {e.path}. Removing from downloaded")
+            except MissingFile as e:
+                logger.warning(
+                    f"Checking books: Could not find book ( {book.title} - {book.download_client_hash} ) torrent path at {e.path}. Removing from downloaded"
+                )
                 book.downloaded = False
                 book.download_progress = 0
                 book.download_client_hash = None
@@ -113,5 +141,3 @@ async def check_books(session: Session, download_client: qBittorrentClient, abs_
     session.commit()
     if moved_book:
         await background_abs_trigger_scan()
-
-

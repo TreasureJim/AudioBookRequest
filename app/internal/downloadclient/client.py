@@ -9,7 +9,11 @@ import secrets
 
 from pydantic import TypeAdapter
 
-from app.internal.downloadclient.types import TorrentStatus, TorrentProperties, torrent_status_sort_fields
+from app.internal.downloadclient.types import (
+    TorrentStatus,
+    TorrentProperties,
+    torrent_status_sort_fields,
+)
 from app.util.log import logger
 
 # Define ParamSpec to capture the exact parameters of the decorated function
@@ -17,25 +21,28 @@ P = ParamSpec("P")
 # Define TypeVar for the return type, constrained to Awaitable for async functions
 R = TypeVar("R", bound=Awaitable[Any])  # pyright: ignore[reportExplicitAny]
 
+
 def authorised(func: Callable[P, R]) -> Callable[P, R]:
     @wraps(func)
     async def wrapper(self: qBittorrentClient, *args: P.args, **kwargs: P.kwargs) -> R:
         # P.args and P.kwargs ensure the wrapper's signature matches func's,
         # with 'self' explicitly typed, which is crucial for instance methods.
-        
+
         if not self.is_authorised():
             print("Client not authorized. Attempting to log in...")
             await self.login()
             if not self.is_authorised():
                 raise qBittorrentClient.LoginUnauthorizedException()
-        
+
         return await func(self, *args, **kwargs)  # pyright: ignore[reportUnknownVariableType, reportCallIssue]
-    
-    return wrapper # pyright: ignore[reportReturnType]
+
+    return wrapper  # pyright: ignore[reportReturnType]
+
 
 def generate_rand_id() -> str:
-    alphabet = string.ascii_letters + string.digits 
-    return ''.join(secrets.choice(alphabet) for _ in range(16))
+    alphabet = string.ascii_letters + string.digits
+    return "".join(secrets.choice(alphabet) for _ in range(16))
+
 
 class qBittorrentClient:
     def __init__(self, base_url: str, username: str, password: str):
@@ -46,22 +53,19 @@ class qBittorrentClient:
         self.sid: Optional[str] = None
 
     def is_authorised(self) -> bool:
-        return (self.sid is not None)
+        return self.sid is not None
 
     async def login(self) -> str:
-        data = {
-            "username": self.username,
-            "password": self.password
-        }
+        data = {"username": self.username, "password": self.password}
 
         url = posixpath.join(self.base_url, "api/v2/auth/login")
-        
+
         async with self.http_session.post(
-            url, 
+            url,
             data=data,
             headers={
                 "Referer": self.base_url,
-            }
+            },
         ) as resp:
             if resp.status == 403:
                 logger.error("qBittorrent: Too many login attempts. IP is blocked.")
@@ -69,7 +73,8 @@ class qBittorrentClient:
             if not resp.ok:
                 logger.error(
                     "qBittorrent: failed to send login",
-                    status=resp.status, reason=resp.reason,
+                    status=resp.status,
+                    reason=resp.reason,
                 )
                 raise qBittorrentClient.LoginException()
 
@@ -114,8 +119,6 @@ class qBittorrentClient:
 
             return TorrentProperties.model_validate_json(await resp.text())
 
-
-
     class TorrentNotFound(Exception):
         hash: str
 
@@ -131,9 +134,11 @@ class qBittorrentClient:
             self.id = id
 
     @authorised
-    async def start_download(self, torrent_url: str, category: Optional[str], rename: Optional[str] = None) -> TorrentStatus:
+    async def start_download(
+        self, torrent_url: str, category: Optional[str], rename: Optional[str] = None
+    ) -> TorrentStatus:
         """Start downloading the `torrent_url` and return the hash string of the torrent"""
-        valid_prefixes = [ "http://", "https://", "magnet:", "bc://bt/" ]
+        valid_prefixes = ["http://", "https://", "magnet:", "bc://bt/"]
         if not torrent_url.startswith(tuple(valid_prefixes)):
             raise qBittorrentClient.UrlInvalid(torrent_url)
 
@@ -141,10 +146,9 @@ class qBittorrentClient:
         if rename is None:
             rename = id
         else:
-            rename = quote_plus(rename)
             rename = f"{id} - {rename}"
 
-        form = aiohttp.FormData(default_to_multipart=True)
+        form = aiohttp.FormData(default_to_multipart=True, quote_fields=False)
         form.add_field("urls", torrent_url)
         if category:
             category = quote_plus(category)
@@ -153,10 +157,7 @@ class qBittorrentClient:
         form.add_field("rename", rename)
 
         url = posixpath.join(self.base_url, "api/v2/torrents/add")
-        async with self.http_session.post(
-            url,
-            data=form
-        ) as resp:
+        async with self.http_session.post(url, data=form) as resp:
             if resp.status == 415:
                 raise qBittorrentClient.TorrentFileInvalid(torrent_url)
 
@@ -165,9 +166,15 @@ class qBittorrentClient:
         else:
             raise qBittorrentClient.DownloadedTorrentNotIdentified(id)
 
-
     @authorised
-    async def torrent_list(self, category: Optional[str] = None, sort: Optional[torrent_status_sort_fields] = None, limit: Optional[int] = None, offset: Optional[int] = None, hashes: Optional[list[str]] = None) -> list[TorrentStatus]:
+    async def torrent_list(
+        self,
+        category: Optional[str] = None,
+        sort: Optional[torrent_status_sort_fields] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+        hashes: Optional[list[str]] = None,
+    ) -> list[TorrentStatus]:
         params: dict[str, str] = {}
 
         if limit:
@@ -183,29 +190,28 @@ class qBittorrentClient:
 
         url = posixpath.join(self.base_url, "api/v2/torrents/info")
 
-        async with self.http_session.get(
-            url,
-            params=params
-        ) as resp:
+        async with self.http_session.get(url, params=params) as resp:
             self.check_bad_login(resp.status)
 
             adapter = TypeAdapter(list[TorrentStatus])
             return adapter.validate_json(await resp.read())
 
-    async def find_torrent(self, id: str, recently_added: bool) -> Optional[TorrentStatus]:
+    async def find_torrent(
+        self, id: str, recently_added: bool
+    ) -> Optional[TorrentStatus]:
         def filter_torrent(torrent: TorrentStatus) -> bool:
             return id in torrent.name
 
         if recently_added:
             torrents = await self.torrent_list(sort="added_on", limit=10)
             res = list(filter(filter_torrent, torrents))
-            if found := res[0]:
-                return found
+            if len(res) > 0:
+                return res[0]
 
         torrents = await self.torrent_list()
         res = list(filter(filter_torrent, torrents))
-        if found := res[0]:
-            return found
+        if len(res) > 0:
+            return res[0]
 
     class TorrentFileInvalid(Exception):
         url: str

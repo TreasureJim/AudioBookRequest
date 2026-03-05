@@ -75,8 +75,12 @@ class AudiobookSeriesLink(BaseSQLModel, table=True):
 
     sequence: str | None = None
 
-    audiobook: Audiobook = Relationship(back_populates="series_links")  # pyright: ignore[reportAny]
-    series: Series = Relationship(back_populates="audiobook_links")  # pyright: ignore[reportAny]
+    audiobook: Audiobook = Relationship(
+        back_populates="series_links"
+    )  # pyright: ignore[reportAny]
+    series: Series = Relationship(
+        back_populates="audiobook_links"
+    )  # pyright: ignore[reportAny]
 
 
 class AudiobookAuthorLink(BaseSQLModel, table=True):
@@ -88,12 +92,17 @@ class AudiobookAuthorLink(BaseSQLModel, table=True):
     )
 
 
+import posixpath
+
+
 class Series(BaseSQLModel, table=True):
     asin: str = Field(primary_key=True)
     title: str
     save_path: str | None = None
 
-    audiobook_links: list[AudiobookSeriesLink] = Relationship(back_populates="series")  # pyright: ignore[reportAny]
+    audiobook_links: list[AudiobookSeriesLink] = Relationship(
+        back_populates="series"
+    )  # pyright: ignore[reportAny]
 
     def match_to_db(self, session: Session) -> Optional[Series]:
         return session.get(Series, self.asin)
@@ -117,14 +126,17 @@ class Author(BaseSQLModel, table=True):
 
         if self.asin:
             logger.debug("Failed to match author to ID, matching to asin")
-            matched_author = session.exec(select(Author).where(Author.asin == self.asin)).first()
+            matched_author = session.exec(
+                select(Author).where(Author.asin == self.asin)
+            ).first()
             if matched_author:
                 logger.debug("Matched author by asin: %s", matched_author)
                 return matched_author
 
-
         logger.debug("Failed to match author to ID, matching to name")
-        matched_author = session.exec(select(Author).where(Author.name == self.name)).first()
+        matched_author = session.exec(
+            select(Author).where(Author.name == self.name)
+        ).first()
         if matched_author:
             logger.debug("Matched author by name: %s", matched_author)
         return matched_author
@@ -165,9 +177,11 @@ class Audiobook(BaseSQLModel, table=True):
         sa_relationship=relationship(cascade="all, delete-orphan"),
     )
 
-    series_links: list[AudiobookSeriesLink] = Relationship( # pyright: ignore[reportAny]
-        back_populates="audiobook", cascade_delete=True
-    ) 
+    series_links: list[AudiobookSeriesLink] = (
+        Relationship(  # pyright: ignore[reportAny]
+            back_populates="audiobook", cascade_delete=True
+        )
+    )
 
     model_config: SQLModelConfig = cast(
         SQLModelConfig, cast(object, ConfigDict(arbitrary_types_allowed=True))
@@ -232,7 +246,9 @@ class AudiobookRequest(BaseSQLModel, table=True):
         ),
     )
 
-    audiobook: Audiobook = Relationship(back_populates="requests")  # pyright: ignore[reportAny]
+    audiobook: Audiobook = Relationship(
+        back_populates="requests"
+    )  # pyright: ignore[reportAny]
 
     model_config: SQLModelConfig = cast(
         SQLModelConfig, cast(object, ConfigDict(arbitrary_types_allowed=True))

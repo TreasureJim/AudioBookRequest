@@ -53,6 +53,7 @@ router = APIRouter(prefix="/requests", tags=["Requests"])
 class DownloadSourceBody(BaseModel):
     guid: str
     indexer_id: int
+    download_url: str
 
 
 @router.post("/{asin}", response_model=Audiobook)
@@ -72,7 +73,9 @@ async def create_request(
     book = session.get(Audiobook, asin)
     if not book:
         try:
-            book = (await get_single_book(client_session, asin=asin)).match_to_db( session)
+            book = (await get_single_book(client_session, asin=asin)).match_to_db(
+                session
+            )
             session.add(book)
             session.commit()
 
@@ -346,8 +349,8 @@ async def list_sources(
 
 def format_audiobook_str(audiobook: Audiobook) -> str:
     if len(audiobook.series_links) > 0:
-        return f"{audiobook.title} {audiobook.authors[0]} / ##{audiobook.series_links[0].sequence} {audiobook.series_links[0].series}"
-    return f"{audiobook.title} - {audiobook.authors[0]}"
+        return f"{audiobook.title} {audiobook.authors[0].name} / #{audiobook.series_links[0].sequence} {audiobook.series_links[0].series.title}"
+    return f"{audiobook.title} - {audiobook.authors[0].name}"
 
 
 @router.post("/{asin}/download")
@@ -357,8 +360,12 @@ async def download_book(
     body: DownloadSourceBody,
     session: Annotated[Session, Depends(get_session)],
     download_client: Annotated[qBittorrentClient, Depends(get_global_downloadclient)],
-    client_session: Annotated[ClientSession, Depends(get_connection)],  # pyright: ignore[reportUnusedParameter]
-    admin_user: Annotated[DetailedUser, Security(AnyAuth(GroupEnum.admin))],  # pyright: ignore[reportUnusedParameter]
+    client_session: Annotated[
+        ClientSession, Depends(get_connection)
+    ],
+    admin_user: Annotated[
+        DetailedUser, Security(AnyAuth(GroupEnum.admin))
+    ],
 ):
     category = downclient_config.get_category(session)
 
@@ -373,7 +380,7 @@ async def download_book(
 
     try:
         torrent = await download_client.start_download(
-            body.guid, category, rename_torrent
+            body.download_url, category, rename_torrent
         )
     except qBittorrentClient.LoginUnauthorizedException:
         raise HTTPException(

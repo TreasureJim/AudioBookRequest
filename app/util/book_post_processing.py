@@ -50,7 +50,7 @@ def match_book_to_author_path(
             break
 
     if not author_path or not matched_author:
-        author_path = book.authors[0].name
+        author_path = posixpath.join(abs_library_paths[0], book.authors[0].name)
         matched_author = book.authors[0]
 
     matched_author.save_path = author_path
@@ -65,7 +65,10 @@ def match_book_to_series(book: Audiobook, author_path: str) -> AudiobookSeriesLi
     If no series can be matched then it will use the first series in the book and pick a theoretical path for it
     NOTE: this function does not create folders
     """
-    abs_serieses = os.listdir(author_path)
+    try:
+        abs_serieses = os.listdir(author_path)
+    except FileNotFoundError:
+        abs_serieses = []
 
     series_path = None
     matched_series = None
@@ -108,11 +111,13 @@ def hard_link_book(
     # author
     author = match_book_to_author_path(session, book, abs_library_paths)
     if not author.save_path:
-        logger.error(f"Failed to hard link book: author ({author.name}/{author.asin}) has no save_path")
+        logger.error(
+            f"Failed to hard link book: author ({author.name}/{author.asin}) has no save_path"
+        )
         return
     torrent_path_is_folder = not os.path.isfile(torrent_path)
 
-    if len(book.series_links) < 0:
+    if len(book.series_links) == 0:
         Path(author.save_path).mkdir(parents=True, exist_ok=True)
         book_path = posixpath.join(author.save_path, book.title)
         if torrent_path_is_folder:
@@ -126,7 +131,9 @@ def hard_link_book(
     # series
     series_link = match_book_to_series(book, author.save_path)
     if not series_link.series.save_path:
-        logger.error(f"Failed to hard link book: series ({series_link.series.title}/{series_link.series.asin}) has not save_path")
+        logger.error(
+            f"Failed to hard link book: series ({series_link.series.title}/{series_link.series.asin}) has not save_path"
+        )
         return
     Path(series_link.series.save_path).mkdir(parents=True, exist_ok=True)
 
@@ -139,6 +146,3 @@ def hard_link_book(
     else:
         os.mkdir(book_path)
         os.link(torrent_path, posixpath.join(book_path, os.path.basename(torrent_path)))
-
-async def check_abs_paths_available(library_id: str, session: Session, client_session: ClientSession) -> list[(bool, str)]:
-    library = abs_get_library(library_id, session)

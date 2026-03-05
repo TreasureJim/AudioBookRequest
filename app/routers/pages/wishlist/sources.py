@@ -61,12 +61,13 @@ async def download_book(
     asin: str,
     guid: Annotated[str, Form()],
     indexer_id: Annotated[int, Form()],
+    download_url: Annotated[str, Form()],
     session: Annotated[Session, Depends(get_session)],
     client_session: Annotated[ClientSession, Depends(get_connection)],
     admin_user: Annotated[DetailedUser, Security(ABRAuth(GroupEnum.admin))],
     download_client: Annotated[qBittorrentClient, Depends(get_global_downloadclient)],
 ):
-    body = DownloadSourceBody(guid=guid, indexer_id=indexer_id)
+    body = DownloadSourceBody(guid=guid, indexer_id=indexer_id, download_url=download_url)
     return await api_download_book(
         asin=asin,
         body=body,
