@@ -75,12 +75,8 @@ class AudiobookSeriesLink(BaseSQLModel, table=True):
 
     sequence: str | None = None
 
-    audiobook: Audiobook = Relationship(
-        back_populates="series_links"
-    )  # pyright: ignore[reportAny]
-    series: Series = Relationship(
-        back_populates="audiobook_links"
-    )  # pyright: ignore[reportAny]
+    audiobook: Audiobook = Relationship(back_populates="series_links")  # pyright: ignore[reportAny]
+    series: Series = Relationship(back_populates="audiobook_links")  # pyright: ignore[reportAny]
 
 
 class AudiobookAuthorLink(BaseSQLModel, table=True):
@@ -100,9 +96,7 @@ class Series(BaseSQLModel, table=True):
     title: str
     save_path: str | None = None
 
-    audiobook_links: list[AudiobookSeriesLink] = Relationship(
-        back_populates="series"
-    )  # pyright: ignore[reportAny]
+    audiobook_links: list[AudiobookSeriesLink] = Relationship(back_populates="series")  # pyright: ignore[reportAny]
 
     def match_to_db(self, session: Session) -> Optional[Series]:
         return session.get(Series, self.asin)
@@ -171,16 +165,15 @@ class Audiobook(BaseSQLModel, table=True):
     downloaded: bool = False
     download_progress: int = 0
     download_client_hash: str | None = None
+    moved: bool = False
 
     requests: list[AudiobookRequest] = Relationship(  # pyright: ignore[reportAny]
         back_populates="audiobook",
         sa_relationship=relationship(cascade="all, delete-orphan"),
     )
 
-    series_links: list[AudiobookSeriesLink] = (
-        Relationship(  # pyright: ignore[reportAny]
-            back_populates="audiobook", cascade_delete=True
-        )
+    series_links: list[AudiobookSeriesLink] = (  # pyright: ignore[reportAny]
+        Relationship(back_populates="audiobook", cascade_delete=True)
     )
 
     model_config: SQLModelConfig = cast(
@@ -246,9 +239,7 @@ class AudiobookRequest(BaseSQLModel, table=True):
         ),
     )
 
-    audiobook: Audiobook = Relationship(
-        back_populates="requests"
-    )  # pyright: ignore[reportAny]
+    audiobook: Audiobook = Relationship(back_populates="requests")  # pyright: ignore[reportAny]
 
     model_config: SQLModelConfig = cast(
         SQLModelConfig, cast(object, ConfigDict(arbitrary_types_allowed=True))

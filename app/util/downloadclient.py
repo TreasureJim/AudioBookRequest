@@ -81,6 +81,7 @@ async def check_download_progress_task(stop_event: asyncio.Event):
                 await timeout_event(stop_event, 30.0)
                 continue
 
+            await match_downloaded_books(session, down_client)
             await check_books(session, down_client, abs_folders)
 
             await timeout_event(stop_event, 5.0)
@@ -88,10 +89,32 @@ async def check_download_progress_task(stop_event: asyncio.Event):
     except asyncio.CancelledError:
         logger.info(f"Background task {task_id} cancelled.")
     except Exception as e:
-        logger.error("Background task ran into exception: %s", e)
+        logger.exception("Background task ran into exception: %s", e)
     finally:
         logger.info(f"Background task {task_id} stopped.")
 
+async def match_downloaded_books(
+    session: Session, download_client: qBittorrentClient
+):
+    # Find books where download has started or finished
+    books = session.exec(
+        select(Audiobook)
+        .where(Audiobook.downloaded)
+        .where(Audiobook.download_client_hash is None)
+    ).all()
+
+    torrent_matches = await download_client.batch_find_torrent([book.asin for book in books])
+    for (i, (id, torrent)) in enumerate(torrent_matches):
+        if not torrent:
+            continue
+
+        book = books[i]
+        if book.asin != id and not (book := session.get(Audiobook, id)):
+            continue
+        book.download_client_hash = torrent.hash
+        session.add(book)
+
+    session.commit()
 
 async def check_books(
     session: Session, download_client: qBittorrentClient, abs_folders: list[str]
@@ -127,6 +150,7 @@ async def check_books(
             moved_book = True
             try:
                 hard_link_book(session, book, abs_folders, torrent.content_path)
+                book.moved = True
             except MissingFile as e:
                 logger.warning(
                     f"Checking books: Could not find book ( {book.title} - {book.download_client_hash} ) torrent path at {e.path}. Removing from downloaded"

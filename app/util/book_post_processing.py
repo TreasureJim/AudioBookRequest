@@ -121,12 +121,19 @@ def hard_link_book(
         Path(author.save_path).mkdir(parents=True, exist_ok=True)
         book_path = posixpath.join(author.save_path, book.title)
         if torrent_path_is_folder:
-            shutil.copytree(torrent_path, book_path, copy_function=os.link)
+            try:
+                shutil.copytree(
+                    torrent_path, book_path, copy_function=os.link, dirs_exist_ok=True
+                )
+            except (FileExistsError, shutil.Error):
+                pass
         else:
             os.mkdir(book_path)
             os.link(
                 torrent_path, posixpath.join(book_path, os.path.basename(torrent_path))
             )
+
+        return
 
     # series
     series_link = match_book_to_series(book, author.save_path)
@@ -142,7 +149,12 @@ def hard_link_book(
     )
 
     if torrent_path_is_folder:
-        shutil.copytree(torrent_path, book_path, copy_function=os.link)
+        try:
+            shutil.copytree(
+                torrent_path, book_path, copy_function=os.link, dirs_exist_ok=True
+            )
+        except (FileExistsError, shutil.Error):
+            pass
     else:
         os.mkdir(book_path)
         os.link(torrent_path, posixpath.join(book_path, os.path.basename(torrent_path)))

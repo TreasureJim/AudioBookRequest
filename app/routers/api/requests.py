@@ -380,7 +380,7 @@ async def download_book(
 
     try:
         torrent = await download_client.start_download(
-            body.download_url, category, rename_torrent
+            body.download_url, asin, category, rename_torrent
         )
     except qBittorrentClient.LoginUnauthorizedException:
         raise HTTPException(
@@ -388,6 +388,8 @@ async def download_book(
         )
     except qBittorrentClient.UrlInvalid or qBittorrentClient.TorrentFileInvalid:
         raise HTTPException(status_code=400, detail="Torrent URL is invalid")
+    except qBittorrentClient.DownloadedTorrentNotIdentified:
+        raise HTTPException(status_code=500, detail="Could not identify torrent")
 
     if book:
         book.downloaded = True
