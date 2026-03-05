@@ -135,14 +135,18 @@ class qBittorrentClient:
 
     @authorised
     async def start_download(
-        self, torrent_url: str, category: Optional[str], rename: Optional[str] = None
+        self,
+        torrent_url: str,
+        book_asin: str,
+        category: Optional[str],
+        rename: Optional[str] = None,
     ) -> TorrentStatus:
         """Start downloading the `torrent_url` and return the hash string of the torrent"""
         valid_prefixes = ["http://", "https://", "magnet:", "bc://bt/"]
         if not torrent_url.startswith(tuple(valid_prefixes)):
             raise qBittorrentClient.UrlInvalid(torrent_url)
 
-        id = generate_rand_id()
+        id = book_asin
         if rename is None:
             rename = id
         else:
@@ -212,6 +216,27 @@ class qBittorrentClient:
         res = list(filter(filter_torrent, torrents))
         if len(res) > 0:
             return res[0]
+
+    async def batch_find_torrent(
+        self, ids: list[str]
+    ) -> list[tuple[str, Optional[TorrentStatus]]]:
+        def get_id_from_name(name: str) -> Optional[str]:
+            try:
+                index = name.index(" ")
+                if index == 0:
+                    return None
+                return name[:index]
+            except ValueError:
+                return None
+
+        torrents: dict[str, TorrentStatus] = {}
+        for torrent in await self.torrent_list():
+            id = get_id_from_name(torrent.name)
+            if id:
+                torrents[id] = torrent
+
+        return [(id, torrents.get(id)) for id in ids]
+
 
     class TorrentFileInvalid(Exception):
         url: str
