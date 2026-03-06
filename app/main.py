@@ -55,13 +55,19 @@ with next(get_session()) as session:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
-    await initialise_downloadclient(session)
-    logger.info("Download client initialized.")
-
     stop_event = asyncio.Event()
-    downloadclient_progress_update_task = asyncio.create_task(
-        check_download_progress_task(stop_event)
-    )
+    downloadclient_progress_update_task = None
+
+    try:
+        await initialise_downloadclient(session)
+    except Exception as e:
+        logger.exception("Failed to initialise download client: %s", e)
+    else:
+        logger.info("Download client initialized.")
+
+        downloadclient_progress_update_task = asyncio.create_task(
+            check_download_progress_task(stop_event)
+        )
 
     yield
 
@@ -84,7 +90,7 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
 # Update UI to show progress in downloads page
 # Add page to allow for editing of metadata
 # Good way to start and stop background task when relevant data is updated
-# Handle when there is no asin provided for an author - Maybe just start using our own ids and asin is optional
+# Handle when there is no asin provided for an author - Maybe just start using our own ids and asin is optional - Done
 
 app = FastAPI(
     title="AudioBookRequest",
