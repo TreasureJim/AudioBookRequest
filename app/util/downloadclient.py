@@ -37,13 +37,14 @@ async def initialise_global_downloadclient(session: Session):
     except aiohttp.ClientConnectionError as e:
         logger.error("Failed to initialise download client: %s", e)
         download_client = None
+    else:
+        logger.debug("Initialised global download client")
 
 
 async def get_global_downloadclient(
     session: Annotated[Session, Depends(get_session)],
 ) -> Optional[qBittorrentClient]:
     if not download_client:
-        logger.debug("Initialised global download client")
         await initialise_global_downloadclient(session)
 
     return download_client
