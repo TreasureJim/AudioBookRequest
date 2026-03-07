@@ -32,10 +32,16 @@ async def initialise_global_downloadclient(session: Session):
     password = downclient_config.get_password(session) or ""
 
     download_client = qBittorrentClient(base_url, username, password)
-    await download_client.login()
+    try:
+        await download_client.login()
+    except aiohttp.ClientConnectionError as e:
+        logger.error("Failed to initialise download client: %s", e)
+        download_client = None
 
 
-async def get_global_downloadclient(session: Annotated[Session, Depends(get_session)]):
+async def get_global_downloadclient(
+    session: Annotated[Session, Depends(get_session)],
+) -> Optional[qBittorrentClient]:
     if not download_client:
         logger.debug("Initialised global download client")
         await initialise_global_downloadclient(session)
@@ -93,9 +99,8 @@ async def check_download_progress_task(stop_event: asyncio.Event):
     finally:
         logger.info(f"Background task {task_id} stopped.")
 
-async def match_downloaded_books(
-    session: Session, download_client: qBittorrentClient
-):
+
+async def match_downloaded_books(session: Session, download_client: qBittorrentClient):
     # Find books where download has started or finished
     books = session.exec(
         select(Audiobook)
@@ -103,8 +108,10 @@ async def match_downloaded_books(
         .where(Audiobook.download_client_hash is None)
     ).all()
 
-    torrent_matches = await download_client.batch_find_torrent([book.asin for book in books])
-    for (i, (id, torrent)) in enumerate(torrent_matches):
+    torrent_matches = await download_client.batch_find_torrent(
+        [book.asin for book in books]
+    )
+    for i, (id, torrent) in enumerate(torrent_matches):
         if not torrent:
             continue
 
@@ -115,6 +122,7 @@ async def match_downloaded_books(
         session.add(book)
 
     session.commit()
+
 
 async def check_books(
     session: Session, download_client: qBittorrentClient, abs_folders: list[str]

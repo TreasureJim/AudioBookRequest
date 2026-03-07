@@ -1,5 +1,5 @@
 import uuid
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Optional
 
 from aiohttp import ClientSession
 from fastapi import (
@@ -20,7 +20,7 @@ from app.internal.audible.types import (
     get_region_from_settings,
 )
 from app.internal.auth.authentication import AnyAuth, DetailedUser
-from app.internal.db_queries import get_wishlist_results, match_series_asins
+from app.internal.db_queries import get_wishlist_results
 from app.internal.downloadclient.client import qBittorrentClient
 from app.internal.downloadclient.config import downclient_config
 from app.internal.models import (
@@ -359,7 +359,7 @@ async def download_book(
     # background_task: BackgroundTasks,
     body: DownloadSourceBody,
     session: Annotated[Session, Depends(get_session)],
-    download_client: Annotated[qBittorrentClient, Depends(get_global_downloadclient)],
+    download_client: Annotated[Optional[qBittorrentClient], Depends(get_global_downloadclient)],
     client_session: Annotated[
         ClientSession, Depends(get_connection)
     ],
@@ -367,6 +367,11 @@ async def download_book(
         DetailedUser, Security(AnyAuth(GroupEnum.admin))
     ],
 ):
+    if not download_client:
+        raise HTTPException(
+            status_code=500, detail="Download client is unavailable"
+        )
+
     category = downclient_config.get_category(session)
 
     book = session.exec(select(Audiobook).where(Audiobook.asin == asin)).first()

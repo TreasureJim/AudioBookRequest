@@ -2,6 +2,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Awaitable, Callable
 from urllib.parse import quote_plus, urlencode
+from aiohttp import ClientConnectionError
 from fastapi import FastAPI, HTTPException, Request, status
 import json
 from typing import cast
@@ -32,6 +33,7 @@ from app.routers import api, pages
 from app.util.db import get_session
 from app.util.downloadclient import (
     check_download_progress_task,
+    get_global_downloadclient,
     initialise_global_downloadclient as initialise_downloadclient,
 )
 from app.util.fetch_js import fetch_scripts
@@ -59,15 +61,16 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
     downloadclient_progress_update_task = None
 
     try:
-        await initialise_downloadclient(session)
+        download_client = await get_global_downloadclient(session)
     except Exception as e:
         logger.exception("Failed to initialise download client: %s", e)
     else:
-        logger.info("Download client initialized.")
+        if download_client:
+            logger.info("Download client initialized.")
 
-        downloadclient_progress_update_task = asyncio.create_task(
-            check_download_progress_task(stop_event)
-        )
+            downloadclient_progress_update_task = asyncio.create_task(
+                check_download_progress_task(stop_event)
+            )
 
     yield
 
