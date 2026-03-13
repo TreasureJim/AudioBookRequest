@@ -1,16 +1,17 @@
 import asyncio
 from functools import wraps
 import posixpath
-from typing import Any, Awaitable, Callable, Optional, ParamSpec, TypeVar
+from typing import Any, Awaitable, Callable, Dict, Optional, ParamSpec, TypeVar
 from urllib.parse import quote_plus
 from aiohttp import ClientSession
 import aiohttp
 import string
 import secrets
 
-from pydantic import TypeAdapter
+from pydantic import RootModel, TypeAdapter
 
 from app.internal.downloadclient.types import (
+    Category,
     TorrentStatus,
     TorrentProperties,
     torrent_status_sort_fields,
@@ -207,6 +208,7 @@ class qBittorrentClient:
             adapter = TypeAdapter(list[TorrentStatus])
             return adapter.validate_json(await resp.read())
 
+    @authorised
     async def find_torrent(
         self, id: str, recently_added: bool
     ) -> Optional[TorrentStatus]:
@@ -224,6 +226,7 @@ class qBittorrentClient:
         if len(res) > 0:
             return res[0]
 
+    @authorised
     async def batch_find_torrent(
         self, ids: list[str]
     ) -> list[tuple[str, Optional[TorrentStatus]]]:
@@ -243,6 +246,16 @@ class qBittorrentClient:
                 torrents[id] = torrent
 
         return [(id, torrents.get(id)) for id in ids]
+
+    @authorised
+    async def get_categories(self) -> list[Category]:
+        url = posixpath.join(self.base_url, "api/v2/torrents/categories")
+        async with self.http_session.get(url) as resp:
+            resp.raise_for_status()
+
+            adapter = RootModel[Dict[str, Category]]
+            cats = adapter.model_validate_json(await resp.read())
+            return [cat for (_, cat) in cats.root.items()]
 
     class TorrentFileInvalid(Exception):
         url: str

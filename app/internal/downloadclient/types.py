@@ -241,3 +241,7 @@ class TorrentStatus(BaseModel):
 
     def progress_percentage(self) -> int:
         return int(self.progress * 100)
+
+class Category(BaseModel):
+    name: str
+    savePath: str

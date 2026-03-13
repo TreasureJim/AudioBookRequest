@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, Response, Security
 from pydantic import BaseModel
@@ -8,17 +8,19 @@ from app.internal.auth.authentication import APIKeyAuth, DetailedUser
 
 from app.internal.downloadclient.client import qBittorrentClient
 from app.internal.downloadclient.config import DownclientMisconfigured, downclient_config
+from app.internal.downloadclient.types import Category
 from app.internal.models import GroupEnum
-from app.util.downloadclient import initialise_global_downloadclient
+from app.util.downloadclient import get_global_downloadclient, initialise_global_downloadclient
 from app.util.db import get_session
 
 router = APIRouter(prefix="/downloadclient")
-
 
 class DownclientResponse(BaseModel):
     base_url: str
     username: str
     password: str
+    selected_category: str
+    categories: list[Category]
 
 
 @router.get("")
@@ -26,13 +28,20 @@ async def read_downclient(
     session: Annotated[Session, Depends(get_session)],
     # client_session: Annotated[ClientSession, Depends(get_connection)],
     admin_user: Annotated[DetailedUser, Security(APIKeyAuth(GroupEnum.admin))],
+    download_client: Annotated[Optional[qBittorrentClient], Depends(get_global_downloadclient)]
 ):
     _ = admin_user
     base_url = downclient_config.get_base_url(session) or ""
     username = downclient_config.get_username(session) or ""
     password = downclient_config.get_password(session) or ""
+    selected_category = downclient_config.get_category(session) or ""
 
-    return DownclientResponse(base_url=base_url, username=username, password=password)
+    if download_client:
+        categories = await download_client.get_categories()
+    else:
+        categories = []
+
+    return DownclientResponse(base_url=base_url, username=username, password=password, selected_category=selected_category, categories=categories)
 
 
 @router.put("/base-url")
@@ -66,6 +75,15 @@ def update_downclient_password(
     _ = admin_user
     downclient_config.set_password(session, password)
     return Response(status_code=204)
+
+def update_downclient_category(
+    category: Annotated[str, Form()],
+    session: Annotated[Session, Depends(get_session)],
+    admin_user: Annotated[DetailedUser, Security(APIKeyAuth(GroupEnum.admin))],
+):
+    _ = admin_user
+    # TODO check if a valid category
+    downclient_config.set_category(session, category)
 
 
 class DownclientLoginResponse(BaseModel):
