@@ -1,13 +1,11 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, Response, Security
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, Response, Security
 from sqlmodel import Session
 
 from app.internal.auth.authentication import ABRAuth, DetailedUser
-from app.internal.downloadclient.client import qBittorrentClient
 from app.internal.models import GroupEnum
 from app.util.db import get_session
-from app.util.downloadclient import get_global_downloadclient
 from app.util.templates import catalog_response
 
 from app.routers.api.settings.downloadclient import (
@@ -80,12 +78,11 @@ def update_downclient_password(
 
 @router.get("/test-connection")
 async def test_connection(
-    # request: Request,
     session: Annotated[Session, Depends(get_session)],
     admin_user: Annotated[DetailedUser, Security(ABRAuth(GroupEnum.admin))],
-    download_client: Annotated[qBittorrentClient, Depends(get_global_downloadclient)],
+    background_task: BackgroundTasks,
 ):
-    resp = await api_test_downclient_connection(session, admin_user, download_client)
+    resp = await api_test_downclient_connection(session, admin_user, background_task)
 
     return catalog_response(
         "ConnectionTestResult",

@@ -9,7 +9,6 @@ from urllib.parse import urlencode
 from aiohttp import ClientResponse, ClientSession
 from pydantic import BaseModel, TypeAdapter
 from sqlmodel import Session
-from torf import BdecodeError, MetainfoError, ReadError, Torrent
 
 from app.internal.indexers.abstract import SessionContainer
 from app.internal.models import (
@@ -32,36 +31,16 @@ from app.util.connection import USER_AGENT
 from app.util.log import logger
 
 
-async def _get_torrent_info_hash(
-    client_session: ClientSession, download_url: str
-) -> str | None:
-    logger.debug("Fetching torrent info hash", download_url=download_url)
-    async with client_session.get(
-        download_url, headers={"User-Agent": USER_AGENT}
-    ) as r:
-        if not r.ok:
-            logger.error("Failed to fetch torrent", download_url=download_url)
-            return None
-        content = await r.read()
-        try:
-            tor = Torrent.read_stream(content)
-            return tor.infohash
-        except (MetainfoError, ReadError, BdecodeError) as e:
-            logger.error(
-                "Error reading torrent info hash",
-                download_url=download_url,
-                error=str(e),
-            )
 
 
-async def start_download(
+async def prowlarr_start_download(
     session: Session,
     client_session: ClientSession,
     guid: str,
     indexer_id: int,
     requester: User,
     book_asin: str,
-    prowlarr_source: ProwlarrSource | None = None,
+    prowlarr_source: ProwlarrSource | None = None,  # pyright: ignore[reportUnusedParameter]
 ) -> ClientResponse:
     prowlarr_config.raise_if_invalid(session)
     base_url = prowlarr_config.get_base_url(session)
@@ -94,33 +73,6 @@ async def start_download(
                 },
             )
             return response
-
-        # Find additional metadata/replacements to pass along notifications
-        additional_replacements: dict[str, str] = {"bookASIN": book_asin}
-        if prowlarr_source:
-            if prowlarr_source.download_url and prowlarr_source.protocol == "torrent":
-                if info_hash := await _get_torrent_info_hash(
-                    client_session, prowlarr_source.download_url
-                ):
-                    additional_replacements["torrentInfoHash"] = info_hash
-            elif prowlarr_source.magnet_url and prowlarr_source.protocol == "torrent":
-                info_hash = prowlarr_source.magnet_url.replace("magnet:?", "")
-                info_hash = info_hash.replace("xt=urn:btih:", "")
-                info_hash = info_hash.split("&")[0]
-                additional_replacements["torrentInfoHash"] = info_hash
-
-            additional_replacements["sourceSizeMB"] = str(prowlarr_source.size_MB)
-            additional_replacements["sourceTitle"] = prowlarr_source.title
-            additional_replacements["indexerName"] = prowlarr_source.indexer
-            additional_replacements["sourceProtocol"] = prowlarr_source.protocol
-
-        logger.debug("Download successfully started", guid=guid)
-        await send_all_notifications(
-            EventEnum.on_successful_download,
-            requester,
-            book_asin,
-            additional_replacements,
-        )
 
         return response
 

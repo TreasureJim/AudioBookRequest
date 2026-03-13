@@ -1,4 +1,3 @@
-# To dermine what is currently being queried:
 from contextlib import contextmanager
 from typing import Literal
 
@@ -8,13 +7,12 @@ from aiohttp import ClientSession
 from fastapi import HTTPException
 from sqlmodel import Session, select
 
-from app.internal.audiobookshelf.client import abs_trigger_scan
-from app.internal.audiobookshelf.config import abs_config
 from app.internal.models import Audiobook, ProwlarrSource, User
-from app.internal.prowlarr.prowlarr import query_prowlarr, start_download
+from app.internal.prowlarr.prowlarr import query_prowlarr
 from app.internal.prowlarr.util import prowlarr_config
 from app.internal.ranking.download_ranking import rank_sources
 from app.util.db import get_session
+from app.util.download import DownloadError, start_download_with_rename
 
 querying: set[str] = set()
 
@@ -48,8 +46,8 @@ async def query_sources(
     client_session: ClientSession,
     requester: User,
     force_refresh: bool = False,
-    start_auto_download: bool = False,
     only_return_if_cached: bool = False,
+    start_auto_download: bool = False
 ) -> QueryResult:
     book = session.exec(select(Audiobook).where(Audiobook.asin == asin)).first()
     if not book:
@@ -84,32 +82,30 @@ async def query_sources(
 
         # start download if requested
         if start_auto_download and not book.downloaded and len(ranked) > 0:
-            # TODO: Replace logic with download client
-            resp = await start_download(
-                session=session,
-                client_session=client_session,
-                guid=ranked[0].guid,
-                indexer_id=ranked[0].indexer_id,
-                requester=requester,
-                book_asin=asin,
-                prowlarr_source=ranked[0],
-            )
-            if resp.ok:
-                same_books = session.exec(
-                    select(Audiobook).where(Audiobook.asin == asin)
-                ).all()
-                for b in same_books:
-                    b.downloaded = True
-                    session.add(b)
-                session.commit()
-                # Try to trigger an ABS scan to pick up new media
-                try:
-                    if abs_config.is_valid(session):
-                        await abs_trigger_scan(session, client_session)
-                except Exception:
-                    pass
-            else:
-                raise HTTPException(status_code=500, detail="Failed to start download")
+            if not (url := ranked[0].download_url or ranked[0].magnet_url):
+                raise HTTPException(status_code=500, detail=f"{ranked[0].guid} had no torrent or magnet link")
+
+            try:
+                await start_download_with_rename(
+                    session=session,
+                    client_session=client_session,
+                    guid=ranked[0].guid,
+                    torrent_url=url,
+                    indexer_id=ranked[0].indexer_id,
+                    requester=requester,
+                    book=book,
+                    prowlarr_source=ranked[0],
+                )
+            except DownloadError as e:
+                raise HTTPException(status_code=500, detail=e)
+
+            same_books = session.exec(
+                select(Audiobook).where(Audiobook.asin == asin)
+            ).all()
+            for b in same_books:
+                b.downloaded = True
+                session.add(b)
+            session.commit()
 
         return QueryResult(
             sources=ranked,

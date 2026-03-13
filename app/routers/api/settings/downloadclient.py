@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, Response, Security
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, Response, Security
 from pydantic import BaseModel
 from sqlmodel import Session
 
@@ -9,8 +9,8 @@ from app.internal.auth.authentication import APIKeyAuth, DetailedUser
 from app.internal.downloadclient.client import qBittorrentClient
 from app.internal.downloadclient.config import DownclientMisconfigured, downclient_config
 from app.internal.models import GroupEnum
+from app.util.downloadclient import initialise_global_downloadclient
 from app.util.db import get_session
-from app.util.downloadclient import get_global_downloadclient
 
 router = APIRouter(prefix="/downloadclient")
 
@@ -76,9 +76,8 @@ class DownclientLoginResponse(BaseModel):
 @router.get("/test-connection")
 async def test_downclient_connection(
     session: Annotated[Session, Depends(get_session)],
-    # client_session: Annotated[ClientSession, Depends(get_connection)],
     admin_user: Annotated[DetailedUser, Security(APIKeyAuth(GroupEnum.admin))],
-    download_client: Annotated[qBittorrentClient, Depends(get_global_downloadclient)],
+    background_task: BackgroundTasks,
 ) -> DownclientLoginResponse:
     _ = admin_user
 
@@ -87,8 +86,14 @@ async def test_downclient_connection(
     except DownclientMisconfigured as e:
         return DownclientLoginResponse(success=False, reason=f"Config is not valid: {e}")
 
+    base_url = downclient_config.get_base_url(session)
+    assert base_url
+    username = downclient_config.get_username(session) or ""
+    password = downclient_config.get_password(session) or ""
+
+    local_download_client = qBittorrentClient(base_url, username, password)
     try:
-        await download_client.login()
+        await local_download_client.login()
     except qBittorrentClient.LoginUnauthorizedException:
         return DownclientLoginResponse(success=False, reason="Unauthorized")
     except qBittorrentClient.LoginIPBlockedException:
@@ -98,4 +103,5 @@ async def test_downclient_connection(
     except Exception as e:
         return DownclientLoginResponse(success=False, reason=str(e))
     else:
+        background_task.add_task(initialise_global_downloadclient, session)
         return DownclientLoginResponse(success=True, reason="")

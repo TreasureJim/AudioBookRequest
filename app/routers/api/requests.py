@@ -22,7 +22,6 @@ from app.internal.audible.types import (
 from app.internal.auth.authentication import AnyAuth, DetailedUser
 from app.internal.db_queries import get_wishlist_results
 from app.internal.downloadclient.client import qBittorrentClient
-from app.internal.downloadclient.config import downclient_config
 from app.internal.models import (
     Audiobook,
     AudiobookRequest,
@@ -43,6 +42,7 @@ from app.internal.ranking.quality import quality_config
 from app.util.censor import censor
 from app.util.connection import get_connection
 from app.util.db import get_session
+from app.util.download import DownloadError, start_download_with_rename
 from app.util.downloadclient import get_global_downloadclient
 from app.util.log import logger
 from app.util.toast import ToastException
@@ -70,12 +70,11 @@ async def create_request(
     if audible_regions.get(region) is None:
         raise HTTPException(status_code=400, detail="Invalid region")
 
-    book = session.get(Audiobook, asin)
-    if not book:
+    if not ( book := session.get(Audiobook, asin) ):
         try:
-            book = (await get_single_book(client_session, asin=asin)).match_to_db(
-                session
-            )
+            if not ( book := await get_single_book(client_session, asin=asin) ):
+                raise HTTPException(status_code=404, detail="Book not found")
+            book.match_to_db( session)
             session.add(book)
             session.commit()
 
@@ -86,8 +85,7 @@ async def create_request(
                 error=str(e),
             )
             session.rollback()
-        if not book:
-            raise HTTPException(status_code=404, detail="Book not found")
+            raise HTTPException(status_code=500, detail=f"Failed to fetch book (asin: {asin}) details from Audible")
 
     if not session.exec(
         select(AudiobookRequest).where(
@@ -347,11 +345,6 @@ async def list_sources(
     return result
 
 
-def format_audiobook_str(audiobook: Audiobook) -> str:
-    if len(audiobook.series_links) > 0:
-        return f"{audiobook.title} {audiobook.authors[0].name} / #{audiobook.series_links[0].sequence} {audiobook.series_links[0].series.title}"
-    return f"{audiobook.title} - {audiobook.authors[0].name}"
-
 
 @router.post("/{asin}/download")
 async def download_book(
@@ -359,7 +352,6 @@ async def download_book(
     # background_task: BackgroundTasks,
     body: DownloadSourceBody,
     session: Annotated[Session, Depends(get_session)],
-    download_client: Annotated[Optional[qBittorrentClient], Depends(get_global_downloadclient)],
     client_session: Annotated[
         ClientSession, Depends(get_connection)
     ],
@@ -367,40 +359,29 @@ async def download_book(
         DetailedUser, Security(AnyAuth(GroupEnum.admin))
     ],
 ):
-    if not download_client:
-        raise HTTPException(
-            status_code=500, detail="Download client is unavailable"
-        )
-
-    category = downclient_config.get_category(session)
-
-    book = session.exec(select(Audiobook).where(Audiobook.asin == asin)).first()
-    if not book:
-        logger.error(
-            f"Could not find a book with asin {asin} and failed to create name for it"
-        )
-        rename_torrent = None
-    else:
-        rename_torrent = format_audiobook_str(book)
+    
+    if not ( book := session.get(Audiobook, asin) ):
+        if not (book := await get_single_book(client_session, asin)):
+            logger.error(
+                f"Could not find a book with asin {asin} and failed to create name for it"
+            )
+            raise HTTPException(status_code=500, detail=f"Could not find a book with asin {asin} and failed to create name for it")
+        else:
+            book.match_to_db(session)
 
     try:
-        torrent = await download_client.start_download(
-            body.download_url, asin, category, rename_torrent
+        await start_download_with_rename(
+            guid=body.guid,
+            torrent_url=body.download_url,
+            indexer_id=body.indexer_id,
+            book=book,
+            prowlarr_source=None,
+            session=session,
+            client_session=client_session,
+            requester=admin_user,
         )
-    except qBittorrentClient.LoginUnauthorizedException:
-        raise HTTPException(
-            status_code=500, detail="No valid authorisation for download client"
-        )
-    except qBittorrentClient.UrlInvalid or qBittorrentClient.TorrentFileInvalid:
-        raise HTTPException(status_code=400, detail="Torrent URL is invalid")
-    except qBittorrentClient.DownloadedTorrentNotIdentified:
-        raise HTTPException(status_code=500, detail="Could not identify torrent")
-
-    if book:
-        book.downloaded = True
-        book.download_client_hash = torrent.hash
-        session.add(book)
-        session.commit()
+    except DownloadError as e:
+        raise ToastException(str(e))
 
     return Response(status_code=204)
 
@@ -411,14 +392,18 @@ async def start_auto_download_endpoint(
     session: Annotated[Session, Depends(get_session)],
     client_session: Annotated[ClientSession, Depends(get_connection)],
     user: Annotated[DetailedUser, Security(AnyAuth(GroupEnum.trusted))],
+    download_client: Annotated[Optional[qBittorrentClient], Depends(get_global_downloadclient)]
 ):
+    if not download_client:
+        raise HTTPException(status_code=500, detail="Download client not initialised")
+
     try:
         await query_sources(
             asin=asin,
-            start_auto_download=True,
             session=session,
             client_session=client_session,
             requester=user,
+            start_auto_download=True
         )
     except HTTPException as e:
         raise ToastException(e.detail) from None

@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Optional
 
 from aiohttp import ClientSession
 from fastapi import APIRouter, Depends, Security
@@ -6,11 +6,13 @@ from sqlmodel import Session
 
 from app.internal.auth.authentication import ABRAuth, DetailedUser
 from app.internal.db_queries import get_wishlist_counts, get_wishlist_results
+from app.internal.downloadclient.client import qBittorrentClient
 from app.internal.models import GroupEnum
 from app.routers.api.requests import delete_request as api_delete_request
 from app.routers.api.requests import start_auto_download_endpoint
 from app.util.connection import get_connection
 from app.util.db import get_session
+from app.util.downloadclient import get_global_downloadclient
 from app.util.templates import catalog_response
 
 from . import downloaded, manual, sources
@@ -44,8 +46,9 @@ async def start_auto_download(
     session: Annotated[Session, Depends(get_session)],
     client_session: Annotated[ClientSession, Depends(get_connection)],
     user: Annotated[DetailedUser, Security(ABRAuth(GroupEnum.trusted))],
+    download_client: Annotated[Optional[qBittorrentClient], Depends(get_global_downloadclient)]
 ):
-    await start_auto_download_endpoint(asin, session, client_session, user)
+    await start_auto_download_endpoint(asin, session, client_session, user, download_client)
     username = None if user.is_admin() else user.username
     results = get_wishlist_results(session, username, "not_downloaded")
     counts = get_wishlist_counts(session, user)

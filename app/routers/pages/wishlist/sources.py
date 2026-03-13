@@ -5,14 +5,12 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Security
 from sqlmodel import Session
 
 from app.internal.auth.authentication import ABRAuth, DetailedUser
-from app.internal.downloadclient.client import qBittorrentClient
 from app.internal.models import GroupEnum
 from app.routers.api.requests import DownloadSourceBody
 from app.routers.api.requests import download_book as api_download_book
 from app.routers.api.requests import list_sources as api_list_sources
 from app.util.connection import get_connection
 from app.util.db import get_session
-from app.util.downloadclient import get_global_downloadclient
 from app.util.redirect import BaseUrlRedirectResponse
 from app.util.templates import catalog_response
 
@@ -65,7 +63,6 @@ async def download_book(
     session: Annotated[Session, Depends(get_session)],
     client_session: Annotated[ClientSession, Depends(get_connection)],
     admin_user: Annotated[DetailedUser, Security(ABRAuth(GroupEnum.admin))],
-    download_client: Annotated[qBittorrentClient, Depends(get_global_downloadclient)],
 ):
     body = DownloadSourceBody(guid=guid, indexer_id=indexer_id, download_url=download_url)
     return await api_download_book(
@@ -74,5 +71,4 @@ async def download_book(
         session=session,
         client_session=client_session,
         admin_user=admin_user,
-        download_client=download_client
     )

@@ -88,7 +88,6 @@ class AudiobookAuthorLink(BaseSQLModel, table=True):
     )
 
 
-import posixpath
 
 
 class Series(BaseSQLModel, table=True):

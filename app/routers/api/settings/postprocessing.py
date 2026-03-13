@@ -13,6 +13,7 @@ from app.internal.postprocessing.config import postprocessing_config
 from app.internal.audiobookshelf.config import abs_config
 from app.util.connection import get_connection
 from app.util.db import get_session
+from app.util.downloadclient import start_download_monitor, stop_download_monitor
 
 router = APIRouter(prefix="/postprocessing")
 
@@ -45,11 +46,16 @@ async def read_postprocessing(
 
 
 @router.put("/auto-moving")
-def update_postprocessing_auto_moving(
+async def update_postprocessing_auto_moving(
     session: Annotated[Session, Depends(get_session)],
     admin_user: Annotated[DetailedUser, Security(APIKeyAuth(GroupEnum.admin))],
     check_auto_moving: Annotated[bool, Form()],
 ):
     _ = admin_user
     postprocessing_config.set_auto_moving(session, check_auto_moving)
+    if check_auto_moving:
+        start_download_monitor()
+    else:
+        await stop_download_monitor()
+
     return Response(status_code=204)

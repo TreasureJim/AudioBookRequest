@@ -58,8 +58,38 @@ async def timeout_event(event: asyncio.Event, timeout: float):
     except asyncio.TimeoutError:
         pass
 
+class DownloadMonitorManager:
+    stop_event: asyncio.Event = asyncio.Event()
+    task: Optional[asyncio.Task[None]] = None
 
-async def check_download_progress_task(stop_event: asyncio.Event):
+    def start(self):
+         self.task = asyncio.create_task(
+                    download_monitor_task(self.stop_event)
+            )
+
+    async def stop(self):
+        if self.task:
+            self.stop_event.set()
+            await asyncio.sleep(0.1)
+            self.task.cancel()
+            try:
+                await self.task
+            except asyncio.CancelledError:
+                pass  # Expected
+
+            self.task = None
+
+
+global_download_monitor_manager: DownloadMonitorManager = DownloadMonitorManager()
+
+def start_download_monitor():
+    global_download_monitor_manager.start()
+
+async def stop_download_monitor():
+    await global_download_monitor_manager.stop()
+
+
+async def download_monitor_task(stop_event: asyncio.Event):
     """A task that runs every 5 seconds until stopped."""
 
     session = next(get_session())

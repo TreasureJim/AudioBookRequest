@@ -2,25 +2,26 @@ import os
 from pathlib import Path
 import posixpath
 import shutil
+from typing import Optional
 
-import aiohttp
 import rapidfuzz
 from rapidfuzz import fuzz, utils
 from sqlmodel import Session
 
-from app.internal.audiobookshelf.client import abs_get_library
-from app.internal.audiobookshelf.config import abs_config
 from app.internal.models import Audiobook, AudiobookSeriesLink, Author
 from app.util.log import logger
 
 
 def match_book_to_author_path(
     session: Session, book: Audiobook, abs_library_paths: list[str]
-) -> Author:
+) -> Optional[ Author ]:
     """Returns folder path of matched author
     If no author can be matched then it will pick the first author and generate a theoretical folder name from author name
     NOTE: it will not create folders
     """
+    if len(book.authors) == 0:
+        return None
+
     saved_author = next(
         (author for author in book.authors if author.save_path is not None), None
     )
@@ -60,11 +61,13 @@ def match_book_to_author_path(
     return matched_author
 
 
-def match_book_to_series(book: Audiobook, author_path: str) -> AudiobookSeriesLink:
+def match_book_to_series(book: Audiobook, author_path: str) -> Optional[ AudiobookSeriesLink ]:
     """Returns matched Series
     If no series can be matched then it will use the first series in the book and pick a theoretical path for it
     NOTE: this function does not create folders
     """
+    if len(book.series_links) == 0:
+        return None
     try:
         abs_serieses = os.listdir(author_path)
     except FileNotFoundError:
@@ -109,7 +112,10 @@ def hard_link_book(
         raise MissingFile(torrent_path)
 
     # author
-    author = match_book_to_author_path(session, book, abs_library_paths)
+    if not ( author := match_book_to_author_path(session, book, abs_library_paths) ):
+        logger.error(f"Failed to link book (asin {book.asin}), no author associated.")
+        return
+
     if not author.save_path:
         logger.error(
             f"Failed to hard link book: author ({author.name}/{author.asin}) has no save_path"
@@ -137,6 +143,8 @@ def hard_link_book(
 
     # series
     series_link = match_book_to_series(book, author.save_path)
+    assert(series_link)
+
     if not series_link.series.save_path:
         logger.error(
             f"Failed to hard link book: series ({series_link.series.title}/{series_link.series.asin}) has not save_path"

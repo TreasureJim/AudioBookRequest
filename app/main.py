@@ -1,8 +1,6 @@
-import asyncio
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Awaitable, Callable
 from urllib.parse import quote_plus, urlencode
-from aiohttp import ClientConnectionError
 from fastapi import FastAPI, HTTPException, Request, status
 import json
 from typing import cast
@@ -32,9 +30,9 @@ from app.internal.prowlarr.util import ProwlarrMisconfigured
 from app.routers import api, pages
 from app.util.db import get_session
 from app.util.downloadclient import (
-    check_download_progress_task,
     get_global_downloadclient,
-    initialise_global_downloadclient as initialise_downloadclient,
+    start_download_monitor,
+    stop_download_monitor,
 )
 from app.util.fetch_js import fetch_scripts
 from app.util.redirect import BaseUrlRedirectResponse
@@ -57,9 +55,6 @@ with next(get_session()) as session:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
-    stop_event = asyncio.Event()
-    downloadclient_progress_update_task = None
-
     try:
         download_client = await get_global_downloadclient(session)
     except Exception as e:
@@ -68,20 +63,11 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
         if download_client:
             logger.info("Download client initialized.")
 
-            downloadclient_progress_update_task = asyncio.create_task(
-                check_download_progress_task(stop_event)
-            )
+    start_download_monitor()
 
     yield
 
-    if downloadclient_progress_update_task:
-        stop_event.set()
-        await asyncio.sleep(0.1)
-        downloadclient_progress_update_task.cancel()
-        try:
-            await downloadclient_progress_update_task
-        except asyncio.CancelledError:
-            pass  # Expected
+    await stop_download_monitor()
 
 
 # TODO LIAM
@@ -92,7 +78,7 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
 # Identify metadata and move when finished - Done
 # Update UI to show progress in downloads page
 # Add page to allow for editing of metadata
-# Good way to start and stop background task when relevant data is updated
+# Good way to start and stop background task when relevant data is updated - Done
 # Handle when there is no asin provided for an author - Maybe just start using our own ids and asin is optional - Done
 
 app = FastAPI(
