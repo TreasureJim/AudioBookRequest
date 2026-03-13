@@ -106,9 +106,7 @@ async def download_monitor_task(stop_event: asyncio.Event):
             abs_library = await abs_get_library(abs_library_id, session, client_session)
             if not abs_library:
                 return
-            # abs_folders = [folder.fullPath for folder in abs_library.folders]
-            # TODO REMOVE AFTER TESTING
-            abs_folders = ["./books"]
+            abs_folders = [folder.fullPath for folder in abs_library.folders]
         while not stop_event.is_set():
             down_client = await get_global_downloadclient(session)
             if not down_client:

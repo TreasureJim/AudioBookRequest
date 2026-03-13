@@ -110,9 +110,6 @@ async def abs_check_paths_available(
         return None
     folders = [folder.fullPath for folder in library.folders]
 
-    # TODO REMOVE AFTER TESTING
-    folders = ["./books"]
-
     def path_ok(path: str) -> bool:
         return (
             os.access(path, os.F_OK)
