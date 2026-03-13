@@ -1,3 +1,4 @@
+import asyncio
 from functools import wraps
 import posixpath
 from typing import Any, Awaitable, Callable, Optional, ParamSpec, TypeVar
@@ -34,7 +35,11 @@ def authorised(func: Callable[P, R]) -> Callable[P, R]:
             if not self.is_authorised():
                 raise qBittorrentClient.LoginUnauthorizedException()
 
-        return await func(self, *args, **kwargs)  # pyright: ignore[reportUnknownVariableType, reportCallIssue]
+        return await func(
+            self,  # pyright: ignore[reportUnknownVariableType, reportCallIssue]
+            *args,
+            **kwargs,
+        )
 
     return wrapper  # pyright: ignore[reportReturnType]
 
@@ -165,6 +170,8 @@ class qBittorrentClient:
             if resp.status == 415:
                 raise qBittorrentClient.TorrentFileInvalid(torrent_url)
 
+        # Add pause so qbittorrent has time to respond with the newly added torrent
+        await asyncio.sleep(1.0)
         if torrent := await self.find_torrent(id, recently_added=True):
             return torrent
         else:
@@ -236,7 +243,6 @@ class qBittorrentClient:
                 torrents[id] = torrent
 
         return [(id, torrents.get(id)) for id in ids]
-
 
     class TorrentFileInvalid(Exception):
         url: str
