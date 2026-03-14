@@ -1,6 +1,6 @@
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Form, Response, Security
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Response, Security
 from pydantic import BaseModel
 from sqlmodel import Session
 
@@ -76,14 +76,25 @@ def update_downclient_password(
     downclient_config.set_password(session, password)
     return Response(status_code=204)
 
-def update_downclient_category(
+async def update_downclient_category(
     category: Annotated[str, Form()],
     session: Annotated[Session, Depends(get_session)],
     admin_user: Annotated[DetailedUser, Security(APIKeyAuth(GroupEnum.admin))],
+    download_client: Annotated[Optional[qBittorrentClient], Depends(get_global_downloadclient)]
 ):
     _ = admin_user
-    # TODO check if a valid category
-    downclient_config.set_category(session, category)
+    if not download_client:
+        return Response(status_code=500)
+
+    def match_cat(cat: Category):
+        return category == cat.name
+    if not ( match := next(filter(match_cat, await download_client.get_categories()), None) ):
+        raise HTTPException(status_code=422, detail="Value does not match a valid category")
+    if match.savePath == "":
+        raise HTTPException(status_code=422, detail="Category must have a path set")
+
+    downclient_config.set_category(session, match.name)
+    return Response(status_code=204)
 
 
 class DownclientLoginResponse(BaseModel):

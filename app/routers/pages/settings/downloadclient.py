@@ -1,6 +1,6 @@
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Form, Response, Security
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Response, Security
 from sqlmodel import Session
 
 from app.internal.auth.authentication import ABRAuth, DetailedUser
@@ -15,6 +15,7 @@ from app.routers.api.settings.downloadclient import (
     update_downclient_base_url as api_update_downclient_base_url,
     update_downclient_username as api_update_downclient_username,
     update_downclient_password as api_update_downclient_password,
+    update_downclient_category as api_update_downclient_category,
     test_downclient_connection as api_test_downclient_connection,
 )
 
@@ -78,6 +79,23 @@ def update_downclient_password(
     api_update_downclient_password(
         password=password, session=session, admin_user=admin_user
     )
+    return Response(status_code=204, headers={"HX-Refresh": "true"})
+
+from app.util.toast import ToastException
+@router.put("/hx-category")
+async def update_downclient_category(
+    category: Annotated[str, Form()],
+    session: Annotated[Session, Depends(get_session)],
+    admin_user: Annotated[DetailedUser, Security(ABRAuth(GroupEnum.admin))],
+    download_client: Annotated[Optional[qBittorrentClient], Depends(get_global_downloadclient)]
+):
+    try:
+        await api_update_downclient_category(
+            category=category, session=session, admin_user=admin_user, download_client=download_client
+        )
+    except HTTPException as e:
+        raise ToastException(e.detail, "error")
+
     return Response(status_code=204, headers={"HX-Refresh": "true"})
 
 
