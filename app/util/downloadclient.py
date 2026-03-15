@@ -12,7 +12,7 @@ from app.internal.audiobookshelf.config import abs_config
 from app.internal.downloadclient.client import qBittorrentClient
 from app.internal.downloadclient.config import downclient_config
 from app.internal.models import Audiobook
-from app.util.book_post_processing import MissingFile, hard_link_book
+from app.util.book_post_processing import MissingFile, post_process_downloaded_book
 from app.util.db import get_session
 from app.util.log import logger
 
@@ -187,7 +187,7 @@ async def check_books(
         if book.download_progress >= 100:
             moved_book = True
             try:
-                hard_link_book(session, book, abs_folders, torrent.content_path)
+                post_process_downloaded_book(session, book, abs_folders, torrent.content_path)
                 book.moved = True
             except MissingFile as e:
                 logger.warning(

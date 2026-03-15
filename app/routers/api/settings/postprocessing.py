@@ -32,6 +32,7 @@ class PostProcessingResponse(BaseModel):
     auto_moving: bool
     auto_moving_dependencies_valid: bool
     required_folders: list[FolderAvailability]
+    disable_hardlinking: bool
 
 
 @router.get("")
@@ -70,6 +71,7 @@ async def read_postprocessing(
         auto_moving=auto_moving or False,
         auto_moving_dependencies_valid=abs_valid and downclient_valid,
         required_folders=folders,
+        disable_hardlinking=postprocessing_config.get_disable_hardlinking(session) or False
     )
 
 
@@ -85,5 +87,16 @@ async def update_postprocessing_auto_moving(
         start_download_monitor()
     else:
         await stop_download_monitor()
+
+    return Response(status_code=204)
+
+@router.put("/disable-hardlinking")
+async def update_postprocessing_disable_hardlinking(
+    session: Annotated[Session, Depends(get_session)],
+    admin_user: Annotated[DetailedUser, Security(APIKeyAuth(GroupEnum.admin))],
+    check_disable_hardlinking: Annotated[bool, Form()],
+):
+    _ = admin_user
+    postprocessing_config.set_disable_hardlinking(session, check_disable_hardlinking)
 
     return Response(status_code=204)

@@ -12,6 +12,7 @@ from app.routers.api.settings.postprocessing import (
 )
 from app.routers.api.settings.postprocessing import (
     update_postprocessing_auto_moving as api_update_postprocessing_auto_moving,
+    update_postprocessing_disable_hardlinking as api_update_postprocessing_disable_hardlinking,
 )
 from app.util.connection import get_connection
 from app.util.db import get_session
@@ -40,6 +41,7 @@ async def read_postprocessing(
         auto_moving=results.auto_moving,
         auto_moving_dependencies_valid=results.auto_moving_dependencies_valid,
         required_folders=results.required_folders,
+        disable_hardlinking=results.disable_hardlinking,
     )
 
 
@@ -51,5 +53,16 @@ async def update_postprocessing_auto_moving(
 ):
     await api_update_postprocessing_auto_moving(
         check_auto_moving=check_auto_moving, session=session, admin_user=admin_user
+    )
+    return Response(status_code=204, headers={"HX-Refresh": "true"})
+
+@router.put("/hx-check-disable-hardlinking")
+async def update_postprocessing_disable_hardlinking(
+    session: Annotated[Session, Depends(get_session)],
+    admin_user: Annotated[DetailedUser, Security(ABRAuth(GroupEnum.admin))],
+    check_disable_hardlinking: Annotated[bool, Form()],
+):
+    await api_update_postprocessing_disable_hardlinking(
+        check_disable_hardlinking=check_disable_hardlinking, session=session, admin_user=admin_user
     )
     return Response(status_code=204, headers={"HX-Refresh": "true"})
