@@ -1,11 +1,13 @@
-from typing import Annotated
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Form, Response, Security
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Response, Security
 from sqlmodel import Session
 
 from app.internal.auth.authentication import ABRAuth, DetailedUser
+from app.internal.downloadclient.client import qBittorrentClient
 from app.internal.models import GroupEnum
 from app.util.db import get_session
+from app.util.downloadclient import get_global_downloadclient
 from app.util.templates import catalog_response
 
 from app.routers.api.settings.downloadclient import (
@@ -13,11 +15,11 @@ from app.routers.api.settings.downloadclient import (
     update_downclient_base_url as api_update_downclient_base_url,
     update_downclient_username as api_update_downclient_username,
     update_downclient_password as api_update_downclient_password,
+    update_downclient_category as api_update_downclient_category,
     test_downclient_connection as api_test_downclient_connection,
 )
 
 router = APIRouter(prefix="/downloadclient")
-
 
 @router.get("")
 async def read_downclient(
@@ -25,10 +27,12 @@ async def read_downclient(
     session: Annotated[Session, Depends(get_session)],
     # client_session: Annotated[ClientSession, Depends(get_connection)],
     admin_user: Annotated[DetailedUser, Security(ABRAuth(GroupEnum.admin))],
+    download_client: Annotated[Optional[qBittorrentClient], Depends(get_global_downloadclient)]
 ):
     response = await api_read_downclient(
         session=session,
         admin_user=admin_user,
+        download_client=download_client
     )
     return catalog_response(
         "Settings.DownloadClient",
@@ -37,6 +41,8 @@ async def read_downclient(
         downloadclient_base_url=response.base_url,
         downloadclient_username=response.username,
         downloadclient_password=response.password,
+        downloadclient_category=response.selected_category,
+        downloadclient_categories=response.categories,
     )
 
 
@@ -73,6 +79,23 @@ def update_downclient_password(
     api_update_downclient_password(
         password=password, session=session, admin_user=admin_user
     )
+    return Response(status_code=204, headers={"HX-Refresh": "true"})
+
+from app.util.toast import ToastException
+@router.put("/hx-category")
+async def update_downclient_category(
+    category: Annotated[str, Form()],
+    session: Annotated[Session, Depends(get_session)],
+    admin_user: Annotated[DetailedUser, Security(ABRAuth(GroupEnum.admin))],
+    download_client: Annotated[Optional[qBittorrentClient], Depends(get_global_downloadclient)]
+):
+    try:
+        await api_update_downclient_category(
+            category=category, session=session, admin_user=admin_user, download_client=download_client
+        )
+    except HTTPException as e:
+        raise ToastException(e.detail, "error")
+
     return Response(status_code=204, headers={"HX-Refresh": "true"})
 
 

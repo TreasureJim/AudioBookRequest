@@ -12,7 +12,7 @@ from app.internal.audiobookshelf.config import abs_config
 from app.internal.downloadclient.client import qBittorrentClient
 from app.internal.downloadclient.config import downclient_config
 from app.internal.models import Audiobook
-from app.util.book_post_processing import MissingFile, hard_link_book
+from app.util.book_post_processing import MissingFile, post_process_downloaded_book
 from app.util.db import get_session
 from app.util.log import logger
 
@@ -119,7 +119,7 @@ async def download_monitor_task(stop_event: asyncio.Event):
             await match_downloaded_books(session, down_client)
             await check_books(session, down_client, abs_folders)
 
-            await timeout_event(stop_event, 5.0)
+            await timeout_event(stop_event, 10.0)
 
     except asyncio.CancelledError:
         logger.info(f"Background task {task_id} cancelled.")
@@ -161,6 +161,7 @@ async def check_books(
         select(Audiobook)
         .where(Audiobook.downloaded)
         .where(Audiobook.download_client_hash is not None)
+        .where(Audiobook.moved == False)  # noqa: E712
     ).all()
     book_hashes = [
         book.download_client_hash for book in books if book.download_client_hash
@@ -186,7 +187,7 @@ async def check_books(
         if book.download_progress >= 100:
             moved_book = True
             try:
-                hard_link_book(session, book, abs_folders, torrent.content_path)
+                post_process_downloaded_book(session, book, abs_folders, torrent.content_path)
                 book.moved = True
             except MissingFile as e:
                 logger.warning(

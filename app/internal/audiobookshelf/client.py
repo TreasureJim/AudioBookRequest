@@ -18,6 +18,7 @@ from app.internal.audiobookshelf.types import (
     ABSLibrary,
     ABSPodcastItem,
 )
+from app.internal.folders import FolderAvailability, path_accessible
 from app.internal.models import Audiobook, Author
 from app.util.connection import USER_AGENT
 from app.util.db import get_session
@@ -95,10 +96,6 @@ async def abs_trigger_scan(session: Session, client_session: ClientSession) -> b
         return True
 
 
-class FolderAvailability(BaseModel):
-    path: str
-    accessible: bool
-
 async def abs_check_paths_available(
     session: Session, client_session: ClientSession
 ) -> Optional[list[FolderAvailability]]:
@@ -110,14 +107,7 @@ async def abs_check_paths_available(
         return None
     folders = [folder.fullPath for folder in library.folders]
 
-    def path_ok(path: str) -> bool:
-        return (
-            os.access(path, os.F_OK)
-            and os.access(path, os.R_OK)
-            and os.access(path, os.W_OK)
-        )
-
-    return [FolderAvailability(path=folder, accessible=path_ok(folder)) for folder in folders]
+    return [FolderAvailability(path=folder, accessible=path_accessible(folder)) for folder in folders]
 
 
 async def background_abs_trigger_scan():

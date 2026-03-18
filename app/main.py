@@ -14,6 +14,7 @@ from sqlmodel import select
 from starlette.responses import Content
 
 # Initialise logger first
+from app.internal.postprocessing.config import postprocessing_config
 from app.util.log import logger
 
 from app.internal.audible.search import clear_old_book_caches
@@ -63,7 +64,8 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
         if download_client:
             logger.info("Download client initialized.")
 
-    start_download_monitor()
+    if postprocessing_config.get_auto_moving(session):
+        start_download_monitor()
 
     yield
 

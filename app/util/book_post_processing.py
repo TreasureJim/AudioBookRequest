@@ -2,13 +2,14 @@ import os
 from pathlib import Path
 import posixpath
 import shutil
-from typing import Optional
+from typing import Callable, Optional, cast
 
 import rapidfuzz
 from rapidfuzz import fuzz, utils
 from sqlmodel import Session
 
 from app.internal.models import Audiobook, AudiobookSeriesLink, Author
+from app.internal.postprocessing.config import postprocessing_config
 from app.util.log import logger
 
 
@@ -105,7 +106,7 @@ class MissingFile(Exception):
         self.path = path
 
 
-def hard_link_book(
+def post_process_downloaded_book(
     session: Session, book: Audiobook, abs_library_paths: list[str], torrent_path: str
 ):
     if not os.path.exists(torrent_path):
@@ -121,24 +122,13 @@ def hard_link_book(
             f"Failed to hard link book: author ({author.name}/{author.asin}) has no save_path"
         )
         return
-    torrent_path_is_folder = not os.path.isfile(torrent_path)
 
     if len(book.series_links) == 0:
         Path(author.save_path).mkdir(parents=True, exist_ok=True)
         book_path = posixpath.join(author.save_path, book.title)
-        if torrent_path_is_folder:
-            try:
-                shutil.copytree(
-                    torrent_path, book_path, copy_function=os.link, dirs_exist_ok=True
-                )
-            except (FileExistsError, shutil.Error):
-                pass
-        else:
-            os.mkdir(book_path)
-            os.link(
-                torrent_path, posixpath.join(book_path, os.path.basename(torrent_path))
-            )
 
+        logger.info(f"Linking book {book.asin} from {torrent_path} to {book_path}")
+        process_files_to_location(torrent_path, book_path, postprocessing_config.get_disable_hardlinking(session) or False)
         return
 
     # series
@@ -156,13 +146,52 @@ def hard_link_book(
         series_link.series.save_path, f"Book {series_link.sequence} - {book.title}"
     )
 
-    if torrent_path_is_folder:
+    logger.info(f"Linking book {book.asin} from {torrent_path} to {book_path}")
+    process_files_to_location(torrent_path, book_path, postprocessing_config.get_disable_hardlinking(session) or False)
+
+def process_files_to_location(src: str, dest: str, disable_hardlinking: bool):
+    def log_cross_error(e: str):
+        logger.warning("Failed linking file: Detected a cross link error. Hard linking cannot function across different filesystems, if on docker consider using a single volume: %s", e)
+
+    if not disable_hardlinking:
         try:
-            shutil.copytree(
-                torrent_path, book_path, copy_function=os.link, dirs_exist_ok=True
-            )
-        except (FileExistsError, shutil.Error):
-            pass
+            _process_files_to_location_with_copy_function(src, dest, os.link)
+        except shutil.Error as e:
+                for (_, _, error_msg) in e.args:  # pyright: ignore[reportAny]
+                    if "[Errno 18]" in error_msg or "Cross-device link" in error_msg:
+                        log_cross_error(str(e))
+                        break
+
+                    logger.exception("Failed to hard link file, attempting to copy", e)
+        except OSError as e:
+            if e.errno == 18:
+                log_cross_error(str(e))
+            else:
+                logger.exception("Failed to hard link file, attempting to copy", e)
+        except Exception as e:
+            logger.exception("Failed to hard link file, attempting to copy", e)
+        else:
+            return
+
+    try:
+        print("Trying to copy now")
+        _process_files_to_location_with_copy_function(src, dest, shutil.copy2)
+    except Exception as e:
+        logger.exception("Failed to copy file, aborting", e)
+        return
     else:
-        os.mkdir(book_path)
-        os.link(torrent_path, posixpath.join(book_path, os.path.basename(torrent_path)))
+        return
+    
+
+
+def _process_files_to_location_with_copy_function(src: str, dest: str, copy_function: Callable[[str, str], object]):
+    if not os.path.isfile(src):
+        shutil.copytree(
+            src, dest, copy_function=copy_function, dirs_exist_ok=True
+        )
+        return
+
+    else:
+        os.makedirs(dest, exist_ok=True)
+        copy_function(src, posixpath.join(dest, os.path.basename(src)))
+        return
