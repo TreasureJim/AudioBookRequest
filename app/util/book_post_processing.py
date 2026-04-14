@@ -194,22 +194,22 @@ def process_files_to_location(src: str, dest: str, disable_hardlinking: bool):
                     log_cross_error(str(e))
                     break
 
-                logger.exception("Failed to hard link file, attempting to copy", e)
+                logger.exception("Shutil Error: Failed to hard link file, attempting to copy")
         except OSError as e:
             if e.errno == 18:
                 log_cross_error(str(e))
             else:
-                logger.exception("Failed to hard link file, attempting to copy", e)
-        except Exception as e:
-            logger.exception("Failed to hard link file, attempting to copy", e)
+                logger.exception("OSError: Failed to hard link file, attempting to copy")
+        except Exception:
+            logger.exception("Unknown Error: Failed to hard link file, attempting to copy")
         else:
             return
 
     try:
-        print("Trying to copy now")
+        logger.info("Trying to copy now")
         _process_files_to_location_with_copy_function(src, dest, shutil.copy2)
-    except Exception as e:
-        logger.exception("Failed to copy file, aborting", e)
+    except Exception:
+        logger.exception("Failed to copy file, aborting")
         return
     else:
         return

@@ -123,8 +123,8 @@ async def download_monitor_task(stop_event: asyncio.Event):
 
     except asyncio.CancelledError:
         logger.info(f"Background task {task_id} cancelled.")
-    except Exception as e:
-        logger.exception("Background task ran into exception: %s", e)
+    except Exception:
+        logger.exception("Background task ran into exception")
     finally:
         logger.info(f"Background task {task_id} stopped.")
 
