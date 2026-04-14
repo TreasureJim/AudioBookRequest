@@ -293,6 +293,14 @@ class BookMetadata(BaseSQLModel):
     narrators: list[str] = []
     filetype: str | None = None
 
+class AuthorMetadata(BaseSQLModel):
+    id: int | None
+    asin: str | None
+    name: str
+    save_path: str | None
+
+    serieses: list[Series]
+
 
 class BaseSource(BaseSQLModel):
     guid: str
