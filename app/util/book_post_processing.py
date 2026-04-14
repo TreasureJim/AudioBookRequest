@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 import posixpath
 import shutil
-from typing import Callable, Optional, cast
+from typing import Any, Callable, Optional
 
 import rapidfuzz
 from rapidfuzz import fuzz, utils
@@ -15,7 +15,7 @@ from app.util.log import logger
 
 def match_book_to_author_path(
     session: Session, book: Audiobook, abs_library_paths: list[str]
-) -> Optional[ Author ]:
+) -> Optional[Author]:
     """Returns folder path of matched author
     If no author can be matched then it will pick the first author and generate a theoretical folder name from author name
     NOTE: it will not create folders
@@ -62,7 +62,9 @@ def match_book_to_author_path(
     return matched_author
 
 
-def match_book_to_series(book: Audiobook, author_path: str) -> Optional[ AudiobookSeriesLink ]:
+def match_book_to_series(
+    book: Audiobook, author_path: str
+) -> Optional[AudiobookSeriesLink]:
     """Returns matched Series
     If no series can be matched then it will use the first series in the book and pick a theoretical path for it
     NOTE: this function does not create folders
@@ -113,7 +115,7 @@ def post_process_downloaded_book(
         raise MissingFile(torrent_path)
 
     # author
-    if not ( author := match_book_to_author_path(session, book, abs_library_paths) ):
+    if not (author := match_book_to_author_path(session, book, abs_library_paths)):
         logger.error(f"Failed to link book (asin {book.asin}), no author associated.")
         return
 
@@ -128,12 +130,16 @@ def post_process_downloaded_book(
         book_path = posixpath.join(author.save_path, book.title)
 
         logger.info(f"Linking book {book.asin} from {torrent_path} to {book_path}")
-        process_files_to_location(torrent_path, book_path, postprocessing_config.get_disable_hardlinking(session) or False)
+        process_files_to_location(
+            torrent_path,
+            book_path,
+            postprocessing_config.get_disable_hardlinking(session) or False,
+        )
         return
 
     # series
     series_link = match_book_to_series(book, author.save_path)
-    assert(series_link)
+    assert series_link
 
     if not series_link.series.save_path:
         logger.error(
@@ -147,22 +153,48 @@ def post_process_downloaded_book(
     )
 
     logger.info(f"Linking book {book.asin} from {torrent_path} to {book_path}")
-    process_files_to_location(torrent_path, book_path, postprocessing_config.get_disable_hardlinking(session) or False)
+    process_files_to_location(
+        torrent_path,
+        book_path,
+        postprocessing_config.get_disable_hardlinking(session) or False,
+    )
+
 
 def process_files_to_location(src: str, dest: str, disable_hardlinking: bool):
     def log_cross_error(e: str):
-        logger.warning("Failed linking file: Detected a cross link error. Hard linking cannot function across different filesystems, if on docker consider using a single volume: %s", e)
+        logger.warning(
+            "Failed linking file: Detected a cross link error. Hard linking cannot function across different filesystems, if on docker consider using a single volume: %s",
+            e,
+        )
+
+    def _is_cross_device_error_arg(arg: Any) -> bool: # pyright: ignore[reportExplicitAny, reportAny]
+        """Check if a single argument represents a cross-device link error."""
+        # Must be a tuple or list
+        if not isinstance(arg, (tuple, list)):
+            return False
+        
+        # Must have exactly 3 elements
+        if len(arg) != 3: # pyright: ignore[reportUnknownArgumentType]
+            return False
+        
+        # Third element must be a string with error indicators
+        third = arg[2]  # pyright: ignore[reportUnknownVariableType]
+        if not isinstance(third, str):
+            return False
+        
+        return "[Errno 18]" in third or "Cross-device link" in third
 
     if not disable_hardlinking:
         try:
             _process_files_to_location_with_copy_function(src, dest, os.link)
         except shutil.Error as e:
-                for (_, _, error_msg) in e.args:  # pyright: ignore[reportAny]
-                    if "[Errno 18]" in error_msg or "Cross-device link" in error_msg:
-                        log_cross_error(str(e))
-                        break
+            # Check if any argument matches the cross-device link pattern
+            for arg in e.args: # pyright: ignore[reportAny]
+                if _is_cross_device_error_arg(arg):
+                    log_cross_error(str(e))
+                    break
 
-                    logger.exception("Failed to hard link file, attempting to copy", e)
+                logger.exception("Failed to hard link file, attempting to copy", e)
         except OSError as e:
             if e.errno == 18:
                 log_cross_error(str(e))
@@ -181,14 +213,13 @@ def process_files_to_location(src: str, dest: str, disable_hardlinking: bool):
         return
     else:
         return
-    
 
 
-def _process_files_to_location_with_copy_function(src: str, dest: str, copy_function: Callable[[str, str], object]):
+def _process_files_to_location_with_copy_function(
+    src: str, dest: str, copy_function: Callable[[str, str], object]
+):
     if not os.path.isfile(src):
-        shutil.copytree(
-            src, dest, copy_function=copy_function, dirs_exist_ok=True
-        )
+        shutil.copytree(src, dest, copy_function=copy_function, dirs_exist_ok=True)
         return
 
     else:
