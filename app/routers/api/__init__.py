@@ -9,6 +9,7 @@ from app.routers.api.requests import router as requests_router
 from app.routers.api.search import router as search_router
 from app.routers.api.settings import router as settings_router
 from app.routers.api.users import router as users_router
+from app.routers.api.metadata import router as metadata_router
 from app.util.db import get_session
 from app.util.log import logger
 
@@ -19,6 +20,7 @@ router.include_router(requests_router)
 router.include_router(search_router)
 router.include_router(settings_router)
 router.include_router(users_router)
+router.include_router(metadata_router)
 
 
 @router.get("/health", tags=["System"])
